@@ -36,16 +36,20 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     clientRef.current = client;
 
     // Set up event listeners
-    client.on('ready', ({ user, mode }) => {
-      setIsInitialized(true);
-      setIsAuthenticated(true);
-      setUser(user);
-      setMode(mode as 'embedded' | 'standalone');
-      setLoading(false);
+    client.on('ready', (data) => {
+      if (data) {
+        setIsInitialized(true);
+        setIsAuthenticated(true);
+        setUser(data.user);
+        setMode(data.mode as 'embedded' | 'standalone');
+        setLoading(false);
+      }
     });
 
-    client.on('modeDetected', ({ mode }) => {
-      setMode(mode as 'embedded' | 'standalone');
+    client.on('modeDetected', (data) => {
+      if (data) {
+        setMode(data.mode as 'embedded' | 'standalone');
+      }
     });
 
     client.on('authRequired', () => {
@@ -53,14 +57,18 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
       setLoading(false);
     });
 
-    client.on('loginSuccess', ({ user }) => {
-      setIsAuthenticated(true);
-      setUser(user);
-      setError(null);
+    client.on('loginSuccess', (data) => {
+      if (data) {
+        setIsAuthenticated(true);
+        setUser(data.user);
+        setError(null);
+      }
     });
 
-    client.on('loginError', ({ error }) => {
-      setError(error);
+    client.on('loginError', (data) => {
+      if (data) {
+        setError(data.error);
+      }
     });
 
     client.on('logoutSuccess', () => {
@@ -69,12 +77,16 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
       setBalance(0);
     });
 
-    client.on('balanceUpdate', ({ balance }) => {
-      setBalance(balance);
+    client.on('balanceUpdate', (data) => {
+      if (data) {
+        setBalance(data.balance);
+      }
     });
 
-    client.on('error', ({ type, error }) => {
-      setError(`${type}: ${error}`);
+    client.on('error', (data) => {
+      if (data) {
+        setError(`${data.type}: ${data.error}`);
+      }
     });
 
     client.on('tokenExpired', () => {

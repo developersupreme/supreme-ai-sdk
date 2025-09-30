@@ -2,7 +2,7 @@
  * Type-safe EventEmitter implementation
  */
 
-export type EventListener<T = any> = (data: T) => void;
+export type EventListener<T = any> = (data?: T) => void;
 
 export class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
   private events: Map<keyof Events, Set<EventListener>> = new Map();
@@ -46,13 +46,13 @@ export class EventEmitter<Events extends Record<string, any> = Record<string, an
   /**
    * Emit an event
    */
-  emit<K extends keyof Events>(event: K, data: Events[K]): boolean {
+  emit<K extends keyof Events>(event: K, data?: Events[K]): boolean {
     const listeners = this.events.get(event);
     if (!listeners || listeners.size === 0) return false;
 
     listeners.forEach(listener => {
       try {
-        listener(data);
+        listener(data as Events[K]);
       } catch (error) {
         console.error(`Error in event listener for "${String(event)}":`, error);
       }

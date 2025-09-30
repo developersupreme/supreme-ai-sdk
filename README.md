@@ -34,25 +34,53 @@ A comprehensive TypeScript SDK for integrating the Supreme AI Credit System into
 
 ## Installation
 
-### Using NPM
+### Install from GitHub (Available Now)
 
 ```bash
+# Using NPM
+npm install github:developersupreme/supreme-credit-sdk
+
+# Using Yarn
+yarn add github:developersupreme/supreme-credit-sdk
+
+# Using PNPM
+pnpm add github:developersupreme/supreme-credit-sdk
+
+# Install specific version/tag
+npm install github:developersupreme/supreme-credit-sdk#v1.0.0
+
+# Or using the full GitHub URL
+npm install https://github.com/developersupreme/supreme-credit-sdk.git
+```
+
+### Install from NPM Registry (Coming Soon)
+
+Once published to NPM, you'll be able to install using:
+
+```bash
+# Using NPM
 npm install @supreme-ai/credit-sdk
-```
 
-### Using Yarn
-
-```bash
+# Using Yarn
 yarn add @supreme-ai/credit-sdk
-```
 
-### Using PNPM
-
-```bash
+# Using PNPM
 pnpm add @supreme-ai/credit-sdk
 ```
 
-### CDN Usage (For non-bundled projects)
+### Add to package.json
+
+```json
+{
+  "dependencies": {
+    "@supreme-ai/credit-sdk": "github:developersupreme/supreme-credit-sdk"
+  }
+}
+```
+
+Then run `npm install`
+
+### CDN Usage (After NPM publish)
 
 ```html
 <script src="https://unpkg.com/@supreme-ai/credit-sdk@latest/dist/index.js"></script>
@@ -2123,9 +2151,10 @@ describe('CreditSystemClient', () => {
 
 For issues, questions, or feature requests:
 
-- GitHub Issues: [https://github.com/supreme-ai/credit-sdk/issues](https://github.com/supreme-ai/credit-sdk/issues)
-- Documentation: [https://docs.supreme-ai.com/credit-sdk](https://docs.supreme-ai.com/credit-sdk)
-- Email: support@supreme-ai.com
+- GitHub Repository: [https://github.com/developersupreme/supreme-credit-sdk](https://github.com/developersupreme/supreme-credit-sdk)
+- GitHub Issues: [https://github.com/developersupreme/supreme-credit-sdk/issues](https://github.com/developersupreme/supreme-credit-sdk/issues)
+- Documentation: This README and the [INSTALLATION.md](INSTALLATION.md) guide
+- NPM Package: Coming soon at [@supreme-ai/credit-sdk](https://www.npmjs.com/package/@supreme-ai/credit-sdk)
 
 ## License
 

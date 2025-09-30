@@ -4,8 +4,9 @@
  * @packageDocumentation
  */
 
-// Core exports
-export { CreditSystemClient } from './core/CreditSystemClient';
+// Core imports and exports
+import { CreditSystemClient } from './core/CreditSystemClient';
+export { CreditSystemClient };
 
 // React exports
 export { useCreditSystem } from './react/useCreditSystem';
