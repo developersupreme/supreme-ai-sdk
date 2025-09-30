@@ -1,0 +1,38 @@
+# Source files (only distribute built files)
+src/
+*.ts
+!*.d.ts
+
+# Config files
+tsconfig.json
+.eslintrc*
+.prettierrc*
+jest.config.*
+
+# Development files
+*.log
+*.tgz
+.DS_Store
+node_modules/
+.env*
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Documentation source
+docs/
+
+# Keep these
+!dist/
+!README.md
+!LICENSE
+!package.json
