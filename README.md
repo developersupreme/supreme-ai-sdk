@@ -1357,93 +1357,228 @@ useEffect(() => {
 
 **File:** `C:\Git Projects\supreme-intelligence-v2\resources\views\iframe-parent.blade.php`
 
-**JavaScript Integration:**
+**Complete Implementation:**
 
-```javascript
-// Get Laravel authenticated user
-const laravelUser = @json(auth()->user());
-const isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+The parent page uses a two-phase approach to handle iframe communication:
+1. **Inline script** (before iframe) - Sets up early message listener to catch messages before DOM is ready
+2. **DOMContentLoaded script** - Defines handlers and processes pending messages
 
-// Function to get JWT token for iframe
-async function getJWTTokenForIframe() {
-  if (!laravelUser) {
-    console.error('No Laravel user authenticated');
-    return false;
-  }
+```html
+<!-- Phase 1: Early Message Listener (Inline, before iframe) -->
+<script>
+    console.log('🚀 Inline parent script loaded EARLY!');
 
-  try {
-    // Call session-based JWT generation endpoint
-    const response = await fetch('/iframe/jwt-from-session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      credentials: 'same-origin'
+    // Global flags
+    window.parentDOMReady = false;
+    window.pendingMessages = [];
+
+    // Set up message listener IMMEDIATELY
+    window.addEventListener('message', function(event) {
+        console.log('🔔 INLINE listener received message:', event.data, 'from:', event.origin);
+
+        // Origin validation for security
+        const allowedOriginsString = {{ Js::from(env('CORS_ALLOWED_ORIGINS')) }};
+        const allowedOrigins = allowedOriginsString ? allowedOriginsString.split(',').map(origin => origin.trim()) : [];
+
+        if (!allowedOrigins.includes(event.origin) && event.origin !== window.location.origin) {
+            console.error('❌ BLOCKED: Message from untrusted origin:', event.origin);
+            return;
+        }
+
+        console.log('✅ Origin verified!');
+
+        // Store message for processing after DOM ready
+        if (!window.parentDOMReady) {
+            console.log('📦 DOM not ready, storing message:', event.data.type);
+            window.pendingMessages.push(event);
+        } else if (window.handleMessage) {
+            console.log('⚡ DOM ready, handling message immediately');
+            window.handleMessage(event);
+        }
     });
 
-    const data = await response.json();
+    console.log('✅ INLINE message listener set up complete');
+</script>
 
-    if (response.ok && data.success) {
-      parentJWT = data.data.tokens.access_token;
-      parentRefreshToken = data.data.tokens.refresh_token;
-      parentUser = data.data.user;
+<!-- Iframe Element -->
+<iframe id="creditSystemFrame"
+        src="{{ env('SI_LOVABLE_APP') }}"
+        class="w-full h-[800px]">
+</iframe>
+```
 
-      return true;
+```javascript
+// Phase 2: DOMContentLoaded - Define Handlers
+document.addEventListener('DOMContentLoaded', async function() {
+    const iframe = document.getElementById('creditSystemFrame');
+    const laravelUser = @json(auth()->user());
+    const isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+
+    let parentJWT = null;
+    let parentRefreshToken = null;
+    let parentUser = null;
+
+    // Get iframe origin
+    const iframeSrc = iframe.src;
+    const iframeOrigin = new URL(iframeSrc).origin;
+
+    // Function to get JWT token from Laravel session
+    async function getJWTTokenForIframe() {
+        if (!laravelUser) {
+            console.error('No Laravel user authenticated');
+            return false;
+        }
+
+        try {
+            // Call session-based JWT generation endpoint
+            const response = await fetch('/iframe/jwt-from-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({})
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                parentJWT = data.data.tokens.access_token;
+                parentRefreshToken = data.data.tokens.refresh_token;
+                parentUser = data.data.user;
+
+                console.log('✓ JWT tokens generated successfully');
+                return true;
+            } else {
+                console.error('JWT Generation Failed:', data);
+            }
+        } catch (error) {
+            console.error('Failed to generate JWT token:', error);
+        }
+
+        return false;
     }
-  } catch (error) {
-    console.error('Failed to generate JWT token:', error);
-  }
 
-  return false;
-}
+    // Unified message handler
+    window.handleMessage = async function(event) {
+        const eventData = event.data;
 
-// Listen for JWT token requests from iframe
-window.addEventListener('message', async function(event) {
-  if (event.data?.type === 'REQUEST_JWT_TOKEN') {
-    console.log('Iframe requesting JWT token');
+        if (eventData.type === 'REQUEST_JWT_TOKEN') {
+            await window.handleTokenRequest(event);
+        } else {
+            window.handleOtherMessages(event);
+        }
+    };
 
-    // Get fresh JWT token
-    const success = await getJWTTokenForIframe();
+    // Handler for JWT token requests
+    window.handleTokenRequest = async function(event) {
+        console.log('🔑 Iframe requesting JWT token');
 
-    if (success) {
-      // Send token to iframe
-      iframe.contentWindow.postMessage({
-        type: 'JWT_TOKEN_RESPONSE',
-        token: parentJWT,
-        refreshToken: parentRefreshToken,
-        user: parentUser,
-        timestamp: Date.now()
-      }, iframeOrigin);
-    } else {
-      // Send error response
-      iframe.contentWindow.postMessage({
-        type: 'JWT_TOKEN_RESPONSE',
-        token: null,
-        error: 'Authentication required'
-      }, iframeOrigin);
+        // Clear cached tokens and get fresh ones
+        parentJWT = null;
+        parentRefreshToken = null;
+        parentUser = null;
+
+        const success = await getJWTTokenForIframe();
+
+        if (success) {
+            // Send JWT token to iframe
+            const tokenResponse = {
+                type: 'JWT_TOKEN_RESPONSE',
+                token: parentJWT,
+                refreshToken: parentRefreshToken,
+                user: parentUser,
+                timestamp: Date.now()
+            };
+
+            iframe.contentWindow.postMessage(tokenResponse, iframeOrigin);
+            console.log('✓ Fresh JWT token sent to iframe');
+        } else {
+            // Send failure response
+            iframe.contentWindow.postMessage({
+                type: 'JWT_TOKEN_RESPONSE',
+                token: null,
+                error: 'Authentication required',
+                timestamp: Date.now()
+            }, iframeOrigin);
+            console.log('⚠ No JWT token available');
+        }
+    };
+
+    // Handler for other message types
+    window.handleOtherMessages = function(event) {
+        const eventData = event.data;
+
+        switch(eventData.type) {
+            case 'CREDIT_SYSTEM_READY':
+                console.log('✓ Credit system ready!', eventData);
+                break;
+
+            case 'BALANCE_UPDATE':
+                console.log(`💰 Balance: ${eventData.balance} credits`);
+                break;
+
+            case 'CREDITS_SPENT':
+                console.log(`💳 Spent: ${eventData.amount} credits`, eventData);
+                break;
+
+            case 'CREDITS_ADDED':
+                console.log(`➕ Added: ${eventData.amount} credits`, eventData);
+                break;
+
+            case 'LOGOUT':
+                console.log('👋 User logged out', eventData);
+                parentJWT = null;
+                parentRefreshToken = null;
+                parentUser = null;
+                break;
+
+            case 'ERROR':
+                console.error('❌ Error from iframe', eventData);
+                break;
+        }
+    };
+
+    // Mark DOM as ready
+    window.parentDOMReady = true;
+    console.log('✅ DOM ready flag set, handlers defined');
+
+    // Process all pending messages
+    if (window.pendingMessages && window.pendingMessages.length > 0) {
+        console.log(`🔁 Processing ${window.pendingMessages.length} pending message(s)...`);
+
+        for (const event of window.pendingMessages) {
+            console.log('📨 Processing pending message:', event.data.type);
+            await window.handleMessage(event);
+        }
+
+        window.pendingMessages = [];
+        console.log('✅ All pending messages processed');
     }
-  }
-});
 
-// On iframe load, send JWT token
-iframe.addEventListener('load', async function() {
-  // Wait for iframe to initialize
-  await new Promise(resolve => setTimeout(resolve, 1000));
+    // On iframe load, just clear cached tokens
+    iframe.addEventListener('load', async function() {
+        console.log('📄 Iframe loaded - waiting for REQUEST_JWT_TOKEN message');
 
-  const success = await getJWTTokenForIframe();
-
-  if (success) {
-    iframe.contentWindow.postMessage({
-      type: 'JWT_TOKEN_RESPONSE',
-      token: parentJWT,
-      refreshToken: parentRefreshToken,
-      user: parentUser
-    }, iframeOrigin);
-  }
+        // Clear cached tokens to ensure fresh generation on request
+        parentJWT = null;
+        parentRefreshToken = null;
+        parentUser = null;
+    });
 });
 ```
+
+**Key Features:**
+
+1. **Early Message Listener**: Set up before iframe loads to catch REQUEST_JWT_TOKEN messages
+2. **Origin Validation**: Verifies messages come from allowed origins (CORS_ALLOWED_ORIGINS)
+3. **Pending Message Queue**: Stores messages that arrive before DOM is ready
+4. **Fresh Token Generation**: Always generates fresh JWT tokens on request (no caching)
+5. **Bidirectional Communication**: Handles messages from iframe and sends responses
+6. **Security**: CSRF token, origin validation, same-origin credentials
 
 ---
 
