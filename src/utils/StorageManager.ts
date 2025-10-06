@@ -4,9 +4,11 @@
 
 export class StorageManager {
   private prefix: string;
+  private debug: boolean;
 
-  constructor(prefix: string = '') {
+  constructor(prefix: string = '', debug: boolean = false) {
     this.prefix = prefix;
+    this.debug = debug;
   }
 
   /**
@@ -17,7 +19,9 @@ export class StorageManager {
       const item = sessionStorage.getItem(this.prefix + key);
       return item ? JSON.parse(item) : null;
     } catch (error) {
-      console.error('Storage get error:', error);
+      if (this.debug) {
+        console.error('Storage get error:', error);
+      }
       return null;
     }
   }
@@ -30,7 +34,9 @@ export class StorageManager {
       sessionStorage.setItem(this.prefix + key, JSON.stringify(value));
       return true;
     } catch (error) {
-      console.error('Storage set error:', error);
+      if (this.debug) {
+        console.error('Storage set error:', error);
+      }
       return false;
     }
   }
@@ -43,7 +49,9 @@ export class StorageManager {
       sessionStorage.removeItem(this.prefix + key);
       return true;
     } catch (error) {
-      console.error('Storage remove error:', error);
+      if (this.debug) {
+        console.error('Storage remove error:', error);
+      }
       return false;
     }
   }
@@ -63,7 +71,9 @@ export class StorageManager {
       keys.forEach(key => sessionStorage.removeItem(key));
       return true;
     } catch (error) {
-      console.error('Storage clear error:', error);
+      if (this.debug) {
+        console.error('Storage clear error:', error);
+      }
       return false;
     }
   }

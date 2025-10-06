@@ -6,6 +6,7 @@ export type EventListener<T = any> = (data?: T) => void;
 
 export class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
   private events: Map<keyof Events, Set<EventListener>> = new Map();
+  protected debug: boolean = false;
 
   /**
    * Subscribe to an event
@@ -54,7 +55,9 @@ export class EventEmitter<Events extends Record<string, any> = Record<string, an
       try {
         listener(data as Events[K]);
       } catch (error) {
-        console.error(`Error in event listener for "${String(event)}":`, error);
+        if (this.debug) {
+          console.error(`Error in event listener for "${String(event)}":`, error);
+        }
       }
     });
 

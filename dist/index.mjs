@@ -2,6 +2,7 @@
 var EventEmitter = class {
   constructor() {
     this.events = /* @__PURE__ */ new Map();
+    this.debug = false;
   }
   /**
    * Subscribe to an event
@@ -46,7 +47,9 @@ var EventEmitter = class {
       try {
         listener(data);
       } catch (error) {
-        console.error(`Error in event listener for "${String(event)}":`, error);
+        if (this.debug) {
+          console.error(`Error in event listener for "${String(event)}":`, error);
+        }
       }
     });
     return true;
@@ -419,8 +422,9 @@ var ApiClient = class {
 
 // src/utils/StorageManager.ts
 var StorageManager = class {
-  constructor(prefix = "") {
+  constructor(prefix = "", debug = false) {
     this.prefix = prefix;
+    this.debug = debug;
   }
   /**
    * Get an item from storage
@@ -430,7 +434,9 @@ var StorageManager = class {
       const item = sessionStorage.getItem(this.prefix + key);
       return item ? JSON.parse(item) : null;
     } catch (error) {
-      console.error("Storage get error:", error);
+      if (this.debug) {
+        console.error("Storage get error:", error);
+      }
       return null;
     }
   }
@@ -442,7 +448,9 @@ var StorageManager = class {
       sessionStorage.setItem(this.prefix + key, JSON.stringify(value));
       return true;
     } catch (error) {
-      console.error("Storage set error:", error);
+      if (this.debug) {
+        console.error("Storage set error:", error);
+      }
       return false;
     }
   }
@@ -454,7 +462,9 @@ var StorageManager = class {
       sessionStorage.removeItem(this.prefix + key);
       return true;
     } catch (error) {
-      console.error("Storage remove error:", error);
+      if (this.debug) {
+        console.error("Storage remove error:", error);
+      }
       return false;
     }
   }
@@ -473,7 +483,9 @@ var StorageManager = class {
       keys.forEach((key) => sessionStorage.removeItem(key));
       return true;
     } catch (error) {
-      console.error("Storage clear error:", error);
+      if (this.debug) {
+        console.error("Storage clear error:", error);
+      }
       return false;
     }
   }
@@ -490,6 +502,7 @@ var CreditSystemClient = class extends EventEmitter {
   constructor(config = {}) {
     super();
     this.parentResponseReceived = false;
+    this.debug = config.debug || false;
     this.config = {
       apiBaseUrl: config.apiBaseUrl || "/api/secure-credits/jwt",
       authUrl: config.authUrl || "/api/jwt",
@@ -516,7 +529,7 @@ var CreditSystemClient = class extends EventEmitter {
       user: null,
       balance: 0
     };
-    this.storage = new StorageManager(this.config.storagePrefix);
+    this.storage = new StorageManager(this.config.storagePrefix, this.config.debug);
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
     this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
     this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);

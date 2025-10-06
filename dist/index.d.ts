@@ -7,6 +7,7 @@ import { ReactNode } from 'react';
 type EventListener<T = any> = (data?: T) => void;
 declare class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
     private events;
+    protected debug: boolean;
     /**
      * Subscribe to an event
      */

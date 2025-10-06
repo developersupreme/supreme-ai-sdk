@@ -34,6 +34,9 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   constructor(config: CreditSDKConfig = {}) {
     super();
 
+    // Set debug flag first
+    this.debug = config.debug || false;
+
     // Configuration with defaults
     this.config = {
       apiBaseUrl: config.apiBaseUrl || '/api/secure-credits/jwt',
@@ -61,7 +64,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     };
 
     // Initialize components
-    this.storage = new StorageManager(this.config.storagePrefix);
+    this.storage = new StorageManager(this.config.storagePrefix, this.config.debug);
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
     this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
     this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);
