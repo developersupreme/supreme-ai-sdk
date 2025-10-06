@@ -1,31 +1,84 @@
 {
-  "name": "@supreme-ai/sdk-monorepo",
+  "name": "@supreme-ai/credit-sdk",
   "version": "1.0.0",
-  "description": "Supreme AI SDK Monorepo - Credit System and Personas SDKs",
-  "private": true,
-  "workspaces": [
-    "packages/*"
+  "description": "TypeScript SDK for Supreme AI Credit System - Supports both embedded (iframe) and standalone modes",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "build:credit": "npm run build --workspace=packages/credit-sdk",
-    "build:personas": "npm run build --workspace=packages/personas-sdk",
-    "dev": "npm run dev --workspaces"
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external react --external react-dom",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external react --external react-dom",
+    "lint": "eslint . --ext .ts",
+    "test": "jest",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
+    "credit-system",
+    "jwt",
+    "iframe",
+    "postMessage",
+    "api-sdk",
     "supreme-ai",
-    "sdk",
-    "monorepo",
     "typescript",
     "react"
   ],
   "author": "Supreme AI",
   "license": "MIT",
+  "homepage": "https://github.com/developersupreme/supreme-credit-sdk#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/developersupreme/supreme-ai-sdk.git"
+    "url": "git+https://github.com/developersupreme/supreme-credit-sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/developersupreme/supreme-ai-sdk/issues"
+    "url": "https://github.com/developersupreme/supreme-credit-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.1.15",
+    "@types/react-dom": "^19.1.9",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
