@@ -23,8 +23,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external react --external react-dom",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external react --external react-dom",
     "lint": "eslint . --ext .ts",
     "test": "jest",
     "prepare": "npm run build",
