@@ -182,7 +182,7 @@ export interface UseCreditSystemReturn {
   isAuthenticated: boolean;
   mode: 'embedded' | 'standalone' | null;
   user: User | null;
-  balance: number;
+  balance: number | null;
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<AuthResult>;

@@ -22,7 +22,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mode, setMode] = useState<'embedded' | 'standalone' | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,7 +74,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     client.on('logoutSuccess', () => {
       setIsAuthenticated(false);
       setUser(null);
-      setBalance(0);
+      setBalance(null);
     });
 
     client.on('balanceUpdate', (data) => {
