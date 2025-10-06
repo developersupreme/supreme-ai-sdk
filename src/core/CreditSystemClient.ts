@@ -114,24 +114,31 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    * Initialize embedded mode (iframe)
    */
   private async initializeEmbeddedMode(): Promise<void> {
+    this.log('🎬 Initializing embedded mode (iframe)...');
+    this.log(`⏱️ Parent timeout set to ${this.config.parentTimeout}ms`);
+
     // Set up message listener for parent response
     this.messageBridge.on('JWT_TOKEN_RESPONSE', (data: TokenResponseMessage) => {
+      this.log('📨 Received JWT_TOKEN_RESPONSE from parent');
       this.handleParentTokenResponse(data);
     });
 
     // Request JWT token from parent
-    this.log('Requesting JWT token from parent...');
+    this.log('🔑 Requesting JWT token from parent...');
+    this.log(`📍 Iframe origin: ${window.location.origin}`);
     this.messageBridge.sendToParent('REQUEST_JWT_TOKEN', {
       origin: window.location.origin,
       timestamp: Date.now()
     });
 
     this.emit('waitingForParent');
+    this.log('⏳ Waiting for parent response...');
 
     // Set timeout to fall back to standalone mode
     setTimeout(() => {
       if (!this.parentResponseReceived) {
-        this.log('No response from parent, switching to standalone mode');
+        this.log(`⏰ Timeout! No response from parent after ${this.config.parentTimeout}ms`);
+        this.log('🔄 Switching to standalone mode');
         this.emit('parentTimeout');
         this.initializeStandaloneMode();
       }
@@ -143,28 +150,37 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   private handleParentTokenResponse(data: TokenResponseMessage): void {
     this.parentResponseReceived = true;
+    this.log('✅ Parent response received!');
 
     if (data.token) {
-      this.log('JWT token received from parent');
+      this.log('🎟️ JWT token received from parent');
+      this.log(`👤 User: ${data.user?.email || 'Unknown'}`);
+      this.log(`🔐 Token length: ${data.token?.length || 0} characters`);
+
       this.storage.set('auth', {
         token: data.token,
         refreshToken: data.refreshToken,
         user: data.user
       });
+      this.log('💾 Tokens saved to storage');
 
       this.state.user = data.user || null;
       this.state.isAuthenticated = true;
 
+      this.log('🚀 Initializing with token...');
       this.initializeWithToken();
 
       // Notify parent of successful initialization
+      this.log('📤 Sending CREDIT_SYSTEM_READY to parent');
       this.messageBridge.sendToParent('CREDIT_SYSTEM_READY', {
         user: this.state.user,
         mode: 'embedded'
       });
+      this.log('✨ Embedded mode initialization complete!');
     } else if (data.error) {
-      this.log('Parent requires authentication');
+      this.log(`❌ Parent authentication error: ${data.error}`);
       this.emit('parentAuthRequired', { error: data.error });
+      this.log('🔄 Falling back to standalone mode');
       this.initializeStandaloneMode();
     }
   }
@@ -174,34 +190,43 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   private async initializeStandaloneMode(): Promise<void> {
     this.state.mode = 'standalone';
+    this.log('🖥️ Initializing standalone mode...');
 
     // Check for saved tokens
     const savedAuth = this.storage.get('auth');
 
     if (savedAuth && savedAuth.token) {
-      this.log('Found saved JWT tokens, validating...');
+      this.log('🔍 Found saved JWT tokens, validating...');
+      this.log(`👤 Saved user: ${savedAuth.user?.email || 'Unknown'}`);
 
       // Validate token
       const isValid = await this.authManager.validateToken(savedAuth.token);
 
       if (isValid) {
+        this.log('✅ Token is valid!');
         this.state.user = savedAuth.user;
         this.state.isAuthenticated = true;
+        this.log('🚀 Initializing with valid token...');
         this.initializeWithToken();
       } else {
+        this.log('❌ Token validation failed');
         // Try to refresh token
         if (savedAuth.refreshToken) {
+          this.log('🔄 Attempting token refresh...');
           const refreshed = await this.refreshToken();
           if (!refreshed) {
+            this.log('❌ Token refresh failed - authentication required');
             this.emit('authRequired');
             this.config.onAuthRequired();
           }
         } else {
+          this.log('❌ No refresh token available - authentication required');
           this.emit('authRequired');
           this.config.onAuthRequired();
         }
       }
     } else {
+      this.log('ℹ️ No saved tokens found - authentication required');
       this.emit('authRequired');
       this.config.onAuthRequired();
     }
@@ -243,28 +268,37 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   async login(email: string, password: string): Promise<AuthResult> {
     if (this.state.mode === 'embedded') {
+      this.log('⚠️ Login attempt blocked: Not available in embedded mode');
       return {
         success: false,
         error: 'Login not available in embedded mode'
       };
     }
 
+    this.log('🔐 Login attempt started...');
+    this.log(`📧 Email: ${email}`);
     this.emit('loginStart' as any);
 
     try {
       const result = await this.authManager.login(email, password);
 
       if (result.success && result.tokens && result.user) {
+        this.log('✅ Login successful!');
+        this.log(`👤 User: ${result.user.email}`);
+        this.log(`🔐 Token length: ${result.tokens.access_token?.length || 0} characters`);
+
         // Save to storage
         this.storage.set('auth', {
           token: result.tokens.access_token,
           refreshToken: result.tokens.refresh_token,
           user: result.user
         });
+        this.log('💾 Tokens saved to storage');
 
         this.state.user = result.user;
         this.state.isAuthenticated = true;
 
+        this.log('🚀 Initializing with token...');
         this.initializeWithToken();
 
         this.emit('loginSuccess', { user: result.user });
@@ -272,11 +306,13 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         return { success: true, user: result.user, tokens: result.tokens };
       } else {
         const error = result.message || 'Login failed';
+        this.log(`❌ Login failed: ${error}`);
         this.emit('loginError', { error });
         return { success: false, error };
       }
     } catch (error: any) {
       const errorMsg = error.message || 'Network error';
+      this.log(`❌ Login error: ${errorMsg}`);
       this.emit('loginError', { error: errorMsg });
       return { success: false, error: errorMsg };
     }
@@ -324,19 +360,29 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   async checkBalance(): Promise<BalanceResult> {
     if (!this.state.isAuthenticated) {
+      this.log('⚠️ Balance check blocked: Not authenticated');
       return { success: false, error: 'Not authenticated' };
     }
+
+    this.log('💰 Fetching current balance...');
 
     try {
       const result = await this.apiClient.get<{ balance: number }>('/balance');
 
       if (result.success && result.data) {
+        const previousBalance = this.state.balance;
         this.state.balance = result.data.balance;
+
+        this.log(`✅ Balance fetched: ${this.state.balance} credits`);
+        if (previousBalance !== this.state.balance) {
+          this.log(`📊 Balance changed: ${previousBalance} → ${this.state.balance}`);
+        }
 
         this.emit('balanceUpdate', { balance: this.state.balance });
 
         // Notify parent if in embedded mode
         if (this.state.mode === 'embedded') {
+          this.log('📤 Sending BALANCE_UPDATE to parent');
           this.messageBridge.sendToParent('BALANCE_UPDATE', {
             balance: this.state.balance,
             timestamp: Date.now()
@@ -345,9 +391,12 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
         return { success: true, balance: this.state.balance };
       } else {
-        return { success: false, error: result.message || 'Failed to get balance' };
+        const error = result.message || 'Failed to get balance';
+        this.log(`❌ Balance fetch failed: ${error}`);
+        return { success: false, error };
       }
     } catch (error: any) {
+      this.log(`❌ Balance fetch error: ${error.message}`);
       this.emit('error', { type: 'balance', error: error.message });
       return { success: false, error: error.message };
     }
@@ -358,16 +407,23 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   async spendCredits(amount: number, description?: string, referenceId?: string): Promise<SpendResult> {
     if (!this.state.isAuthenticated) {
+      this.log('⚠️ Spend credits blocked: Not authenticated');
       return { success: false, error: 'Not authenticated' };
     }
 
     if (amount <= 0) {
+      this.log(`⚠️ Spend credits blocked: Invalid amount (${amount})`);
       return { success: false, error: 'Invalid amount' };
     }
 
     if (amount > this.state.balance) {
+      this.log(`⚠️ Spend credits blocked: Insufficient credits (need ${amount}, have ${this.state.balance})`);
       return { success: false, error: 'Insufficient credits' };
     }
+
+    this.log(`💳 Spending ${amount} credits...`);
+    if (description) this.log(`📝 Description: ${description}`);
+    if (referenceId) this.log(`🔗 Reference ID: ${referenceId}`);
 
     try {
       const result = await this.apiClient.post<any>('/spend', {
@@ -380,6 +436,9 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         const previousBalance = this.state.balance;
         this.state.balance = result.data.new_balance;
 
+        this.log(`✅ Credits spent successfully!`);
+        this.log(`📊 Balance: ${previousBalance} → ${this.state.balance} (spent ${amount})`);
+
         this.emit('creditsSpent', {
           amount,
           description,
@@ -390,6 +449,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
         // Notify parent if in embedded mode
         if (this.state.mode === 'embedded') {
+          this.log('📤 Sending CREDITS_SPENT to parent');
           this.messageBridge.sendToParent('CREDITS_SPENT', {
             amount,
             description,
@@ -404,9 +464,12 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
           transaction: result.data.transaction
         };
       } else {
-        return { success: false, error: result.message || 'Failed to spend credits' };
+        const error = result.message || 'Failed to spend credits';
+        this.log(`❌ Spend credits failed: ${error}`);
+        return { success: false, error };
       }
     } catch (error: any) {
+      this.log(`❌ Spend credits error: ${error.message}`);
       this.emit('error', { type: 'spend', error: error.message });
       return { success: false, error: error.message };
     }
@@ -503,24 +566,33 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   private async refreshToken(): Promise<boolean> {
     const auth = this.storage.get('auth');
     if (!auth?.refreshToken) {
+      this.log('⚠️ Token refresh blocked: No refresh token available');
       return false;
     }
+
+    this.log('🔄 Refreshing JWT token...');
+    this.log(`🔐 Refresh token length: ${auth.refreshToken?.length || 0} characters`);
 
     try {
       const result = await this.authManager.refreshToken(auth.refreshToken);
 
       if (result.success && result.tokens) {
+        this.log('✅ Token refreshed successfully!');
+        this.log(`🔐 New token length: ${result.tokens.access_token?.length || 0} characters`);
+
         // Update storage
         this.storage.set('auth', {
           ...auth,
           token: result.tokens.access_token,
           refreshToken: result.tokens.refresh_token
         });
+        this.log('💾 New tokens saved to storage');
 
         this.emit('tokenRefreshed');
 
         // Notify parent if in embedded mode
         if (this.state.mode === 'embedded') {
+          this.log('📤 Sending JWT_TOKEN_REFRESHED to parent');
           this.messageBridge.sendToParent('JWT_TOKEN_REFRESHED', {
             token: result.tokens.access_token,
             timestamp: Date.now()
@@ -528,11 +600,14 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         }
 
         return true;
+      } else {
+        this.log('❌ Token refresh failed: Invalid response');
       }
     } catch (error) {
-      this.log('Token refresh failed:', error);
+      this.log('❌ Token refresh error:', error);
     }
 
+    this.log('⚠️ Token expired - authentication required');
     this.emit('tokenExpired');
     this.config.onTokenExpired();
     return false;
