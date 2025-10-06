@@ -1,0 +1,1411 @@
+"use strict";
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/index.ts
+var index_exports = {};
+__export(index_exports, {
+  CreditSystemClient: () => CreditSystemClient,
+  CreditSystemProvider: () => CreditSystemProvider,
+  ParentIntegrator: () => ParentIntegrator,
+  default: () => index_default,
+  useCreditContext: () => useCreditContext,
+  useCreditSystem: () => useCreditSystem
+});
+module.exports = __toCommonJS(index_exports);
+
+// src/utils/EventEmitter.ts
+var EventEmitter = class {
+  constructor() {
+    this.events = /* @__PURE__ */ new Map();
+  }
+  /**
+   * Subscribe to an event
+   */
+  on(event, listener) {
+    if (!this.events.has(event)) {
+      this.events.set(event, /* @__PURE__ */ new Set());
+    }
+    this.events.get(event).add(listener);
+    return this;
+  }
+  /**
+   * Subscribe to an event once
+   */
+  once(event, listener) {
+    const onceWrapper = (data) => {
+      listener(data);
+      this.off(event, onceWrapper);
+    };
+    return this.on(event, onceWrapper);
+  }
+  /**
+   * Unsubscribe from an event
+   */
+  off(event, listener) {
+    const listeners = this.events.get(event);
+    if (listeners) {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        this.events.delete(event);
+      }
+    }
+    return this;
+  }
+  /**
+   * Emit an event
+   */
+  emit(event, data) {
+    const listeners = this.events.get(event);
+    if (!listeners || listeners.size === 0) return false;
+    listeners.forEach((listener) => {
+      try {
+        listener(data);
+      } catch (error) {
+        console.error(`Error in event listener for "${String(event)}":`, error);
+      }
+    });
+    return true;
+  }
+  /**
+   * Remove all listeners for an event or all events
+   */
+  removeAllListeners(event) {
+    if (event) {
+      this.events.delete(event);
+    } else {
+      this.events.clear();
+    }
+    return this;
+  }
+  /**
+   * Get listener count for an event
+   */
+  listenerCount(event) {
+    const listeners = this.events.get(event);
+    return listeners ? listeners.size : 0;
+  }
+};
+
+// src/utils/MessageBridge.ts
+var MessageBridge = class extends EventEmitter {
+  constructor(allowedOrigins = [], debug = false) {
+    super();
+    this.allowedOrigins = allowedOrigins;
+    this.debug = debug;
+    this.isIframe = window !== window.parent;
+    this.setupMessageListener();
+  }
+  /**
+   * Set up message listener
+   */
+  setupMessageListener() {
+    this.messageHandler = (event) => {
+      if (!this.isValidOrigin(event.origin)) {
+        if (this.debug) {
+          console.warn("Message from untrusted origin:", event.origin);
+        }
+        return;
+      }
+      if (event.data && event.data.type) {
+        if (this.debug) {
+          console.log("Message received:", event.data);
+        }
+        this.emit(event.data.type, event.data);
+        this.emit("message", event.data);
+      }
+    };
+    window.addEventListener("message", this.messageHandler);
+  }
+  /**
+   * Validate message origin
+   */
+  isValidOrigin(origin) {
+    if (origin === window.location.origin) {
+      return true;
+    }
+    if (this.allowedOrigins.length === 0) {
+      return true;
+    }
+    return this.allowedOrigins.includes(origin);
+  }
+  /**
+   * Send message to parent window
+   */
+  sendToParent(type, data = {}) {
+    if (!this.isIframe) {
+      if (this.debug) {
+        console.warn("Not in iframe, cannot send to parent");
+      }
+      return false;
+    }
+    const message = {
+      type,
+      ...data,
+      timestamp: Date.now()
+    };
+    if (this.debug) {
+      console.log("Sending to parent:", message);
+    }
+    window.parent.postMessage(message, "*");
+    return true;
+  }
+  /**
+   * Send message to iframe
+   */
+  sendToIframe(iframe, type, data = {}) {
+    if (!iframe || !iframe.contentWindow) {
+      if (this.debug) {
+        console.warn("Invalid iframe element");
+      }
+      return false;
+    }
+    const message = {
+      type,
+      ...data,
+      timestamp: Date.now()
+    };
+    if (this.debug) {
+      console.log("Sending to iframe:", message);
+    }
+    iframe.contentWindow.postMessage(message, "*");
+    return true;
+  }
+  /**
+   * Add allowed origin
+   */
+  addAllowedOrigin(origin) {
+    if (!this.allowedOrigins.includes(origin)) {
+      this.allowedOrigins.push(origin);
+    }
+  }
+  /**
+   * Remove allowed origin
+   */
+  removeAllowedOrigin(origin) {
+    const index = this.allowedOrigins.indexOf(origin);
+    if (index > -1) {
+      this.allowedOrigins.splice(index, 1);
+    }
+  }
+  /**
+   * Destroy the message bridge
+   */
+  destroy() {
+    if (this.messageHandler) {
+      window.removeEventListener("message", this.messageHandler);
+    }
+    this.removeAllListeners();
+  }
+};
+
+// src/utils/AuthManager.ts
+var AuthManager = class {
+  constructor(authUrl, debug = false) {
+    this.authUrl = authUrl;
+    this.debug = debug;
+  }
+  /**
+   * Login with credentials
+   */
+  async login(email, password) {
+    try {
+      const response = await fetch(`${this.authUrl}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (response.ok && data.success && data.data) {
+        if (this.debug) {
+          console.log("Login successful");
+        }
+        return {
+          success: true,
+          tokens: data.data.tokens,
+          user: data.data.user
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || "Login failed"
+        };
+      }
+    } catch (error) {
+      if (this.debug) {
+        console.error("Login error:", error);
+      }
+      return {
+        success: false,
+        message: error.message || "Network error"
+      };
+    }
+  }
+  /**
+   * Validate JWT token
+   */
+  async validateToken(token) {
+    try {
+      const response = await fetch(`${this.authUrl}/validate`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        }
+      });
+      const data = await response.json();
+      return response.ok && data.success;
+    } catch (error) {
+      if (this.debug) {
+        console.error("Token validation error:", error);
+      }
+      return false;
+    }
+  }
+  /**
+   * Refresh JWT token
+   */
+  async refreshToken(refreshToken) {
+    try {
+      const response = await fetch(`${this.authUrl}/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      const data = await response.json();
+      if (response.ok && data.success && data.data) {
+        if (this.debug) {
+          console.log("Token refreshed successfully");
+        }
+        return {
+          success: true,
+          tokens: data.data.tokens
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || "Token refresh failed"
+        };
+      }
+    } catch (error) {
+      if (this.debug) {
+        console.error("Token refresh error:", error);
+      }
+      return {
+        success: false,
+        message: error.message || "Network error"
+      };
+    }
+  }
+  /**
+   * Logout
+   */
+  async logout(token) {
+    try {
+      const response = await fetch(`${this.authUrl}/logout`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        }
+      });
+      const data = await response.json();
+      return response.ok && data.success;
+    } catch (error) {
+      if (this.debug) {
+        console.error("Logout error:", error);
+      }
+      return false;
+    }
+  }
+};
+
+// src/utils/ApiClient.ts
+var ApiClient = class {
+  constructor(baseUrl, getToken, debug = false) {
+    this.baseUrl = baseUrl;
+    this.getToken = getToken;
+    this.debug = debug;
+  }
+  /**
+   * Make a GET request
+   */
+  async get(endpoint) {
+    return this.request("GET", endpoint);
+  }
+  /**
+   * Make a POST request
+   */
+  async post(endpoint, body) {
+    return this.request("POST", endpoint, body);
+  }
+  /**
+   * Make a PUT request
+   */
+  async put(endpoint, body) {
+    return this.request("PUT", endpoint, body);
+  }
+  /**
+   * Make a DELETE request
+   */
+  async delete(endpoint) {
+    return this.request("DELETE", endpoint);
+  }
+  /**
+   * Make a request
+   */
+  async request(method, endpoint, body) {
+    const token = this.getToken();
+    if (!token) {
+      return {
+        success: false,
+        error: "No authentication token available"
+      };
+    }
+    try {
+      const url = `${this.baseUrl}${endpoint}`;
+      const headers = {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      };
+      const options = {
+        method,
+        headers
+      };
+      if (body && (method === "POST" || method === "PUT")) {
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      if (this.debug) {
+        console.log(`[ApiClient] ${method} ${url}`, body || "");
+      }
+      const response = await fetch(url, options);
+      const data = await response.json();
+      if (response.ok && data.success) {
+        return {
+          success: true,
+          data: data.data,
+          message: data.message
+        };
+      } else {
+        if (response.status === 401) {
+          return {
+            success: false,
+            error: "Authentication failed",
+            message: data.message || "Unauthorized"
+          };
+        } else if (response.status === 403) {
+          return {
+            success: false,
+            error: "Access denied",
+            message: data.message || "Forbidden"
+          };
+        } else {
+          return {
+            success: false,
+            error: data.error || "Request failed",
+            message: data.message || `Request failed with status ${response.status}`
+          };
+        }
+      }
+    } catch (error) {
+      if (this.debug) {
+        console.error("[ApiClient] Request error:", error);
+      }
+      return {
+        success: false,
+        error: error.message || "Network error",
+        message: "Failed to connect to the server"
+      };
+    }
+  }
+  /**
+   * Set the token (for dynamic updates)
+   */
+  setToken(getToken) {
+    this.getToken = getToken;
+  }
+};
+
+// src/utils/StorageManager.ts
+var StorageManager = class {
+  constructor(prefix = "") {
+    this.prefix = prefix;
+  }
+  /**
+   * Get an item from storage
+   */
+  get(key) {
+    try {
+      const item = sessionStorage.getItem(this.prefix + key);
+      return item ? JSON.parse(item) : null;
+    } catch (error) {
+      console.error("Storage get error:", error);
+      return null;
+    }
+  }
+  /**
+   * Set an item in storage
+   */
+  set(key, value) {
+    try {
+      sessionStorage.setItem(this.prefix + key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      console.error("Storage set error:", error);
+      return false;
+    }
+  }
+  /**
+   * Remove an item from storage
+   */
+  remove(key) {
+    try {
+      sessionStorage.removeItem(this.prefix + key);
+      return true;
+    } catch (error) {
+      console.error("Storage remove error:", error);
+      return false;
+    }
+  }
+  /**
+   * Clear all items with the prefix
+   */
+  clear() {
+    try {
+      const keys = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith(this.prefix)) {
+          keys.push(key);
+        }
+      }
+      keys.forEach((key) => sessionStorage.removeItem(key));
+      return true;
+    } catch (error) {
+      console.error("Storage clear error:", error);
+      return false;
+    }
+  }
+  /**
+   * Check if an item exists
+   */
+  has(key) {
+    return sessionStorage.getItem(this.prefix + key) !== null;
+  }
+};
+
+// src/core/CreditSystemClient.ts
+var CreditSystemClient = class extends EventEmitter {
+  constructor(config = {}) {
+    super();
+    this.parentResponseReceived = false;
+    this.config = {
+      apiBaseUrl: config.apiBaseUrl || "/api/secure-credits/jwt",
+      authUrl: config.authUrl || "/api/jwt",
+      parentTimeout: config.parentTimeout || 3e3,
+      tokenRefreshInterval: config.tokenRefreshInterval || 6e5,
+      // 10 minutes
+      balanceRefreshInterval: config.balanceRefreshInterval || 3e4,
+      // 30 seconds
+      allowedOrigins: config.allowedOrigins || [window.location.origin],
+      autoInit: config.autoInit !== false,
+      debug: config.debug || false,
+      storagePrefix: config.storagePrefix || "creditSystem_",
+      mode: config.mode || "auto",
+      onAuthRequired: config.onAuthRequired || (() => {
+      }),
+      onTokenExpired: config.onTokenExpired || (() => {
+      })
+    };
+    this.state = {
+      mode: null,
+      isInIframe: window !== window.parent,
+      isInitialized: false,
+      isAuthenticated: false,
+      user: null,
+      balance: 0
+    };
+    this.storage = new StorageManager(this.config.storagePrefix);
+    this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
+    this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
+    this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);
+    this.setupEventHandlers();
+    if (this.config.autoInit) {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+          setTimeout(() => this.initialize(), 0);
+        });
+      } else {
+        setTimeout(() => this.initialize(), 0);
+      }
+    }
+  }
+  /**
+   * Initialize the credit system
+   */
+  async initialize() {
+    if (this.state.isInitialized) {
+      this.log("Credit system already initialized");
+      return;
+    }
+    this.log("Initializing Credit System...");
+    if (this.config.mode === "auto") {
+      this.state.mode = this.state.isInIframe ? "embedded" : "standalone";
+    } else {
+      this.state.mode = this.config.mode;
+    }
+    this.log(`Operating in ${this.state.mode.toUpperCase()} mode`);
+    this.emit("modeDetected", { mode: this.state.mode });
+    if (this.state.mode === "embedded") {
+      await this.initializeEmbeddedMode();
+    } else {
+      await this.initializeStandaloneMode();
+    }
+  }
+  /**
+   * Initialize embedded mode (iframe)
+   */
+  async initializeEmbeddedMode() {
+    this.messageBridge.on("JWT_TOKEN_RESPONSE", (data) => {
+      this.handleParentTokenResponse(data);
+    });
+    this.log("Requesting JWT token from parent...");
+    this.messageBridge.sendToParent("REQUEST_JWT_TOKEN", {
+      origin: window.location.origin,
+      timestamp: Date.now()
+    });
+    this.emit("waitingForParent");
+    setTimeout(() => {
+      if (!this.parentResponseReceived) {
+        this.log("No response from parent, switching to standalone mode");
+        this.emit("parentTimeout");
+        this.initializeStandaloneMode();
+      }
+    }, this.config.parentTimeout);
+  }
+  /**
+   * Handle JWT token response from parent
+   */
+  handleParentTokenResponse(data) {
+    this.parentResponseReceived = true;
+    if (data.token) {
+      this.log("JWT token received from parent");
+      this.storage.set("auth", {
+        token: data.token,
+        refreshToken: data.refreshToken,
+        user: data.user
+      });
+      this.state.user = data.user || null;
+      this.state.isAuthenticated = true;
+      this.initializeWithToken();
+      this.messageBridge.sendToParent("CREDIT_SYSTEM_READY", {
+        user: this.state.user,
+        mode: "embedded"
+      });
+    } else if (data.error) {
+      this.log("Parent requires authentication");
+      this.emit("parentAuthRequired", { error: data.error });
+      this.initializeStandaloneMode();
+    }
+  }
+  /**
+   * Initialize standalone mode
+   */
+  async initializeStandaloneMode() {
+    this.state.mode = "standalone";
+    const savedAuth = this.storage.get("auth");
+    if (savedAuth && savedAuth.token) {
+      this.log("Found saved JWT tokens, validating...");
+      const isValid = await this.authManager.validateToken(savedAuth.token);
+      if (isValid) {
+        this.state.user = savedAuth.user;
+        this.state.isAuthenticated = true;
+        this.initializeWithToken();
+      } else {
+        if (savedAuth.refreshToken) {
+          const refreshed = await this.refreshToken();
+          if (!refreshed) {
+            this.emit("authRequired");
+            this.config.onAuthRequired();
+          }
+        } else {
+          this.emit("authRequired");
+          this.config.onAuthRequired();
+        }
+      }
+    } else {
+      this.emit("authRequired");
+      this.config.onAuthRequired();
+    }
+  }
+  /**
+   * Initialize with valid JWT token
+   */
+  initializeWithToken() {
+    this.state.isInitialized = true;
+    this.startTokenRefreshTimer();
+    this.checkBalance();
+    if (this.config.balanceRefreshInterval > 0) {
+      this.startBalanceRefreshTimer();
+    }
+    this.emit("ready", {
+      user: this.state.user,
+      mode: this.state.mode
+    });
+  }
+  /**
+   * Get current auth token
+   */
+  getAuthToken() {
+    const auth = this.storage.get("auth");
+    return auth?.token || null;
+  }
+  /**
+   * Login with credentials (standalone mode)
+   */
+  async login(email, password) {
+    if (this.state.mode === "embedded") {
+      return {
+        success: false,
+        error: "Login not available in embedded mode"
+      };
+    }
+    this.emit("loginStart");
+    try {
+      const result = await this.authManager.login(email, password);
+      if (result.success && result.tokens && result.user) {
+        this.storage.set("auth", {
+          token: result.tokens.access_token,
+          refreshToken: result.tokens.refresh_token,
+          user: result.user
+        });
+        this.state.user = result.user;
+        this.state.isAuthenticated = true;
+        this.initializeWithToken();
+        this.emit("loginSuccess", { user: result.user });
+        return { success: true, user: result.user, tokens: result.tokens };
+      } else {
+        const error = result.message || "Login failed";
+        this.emit("loginError", { error });
+        return { success: false, error };
+      }
+    } catch (error) {
+      const errorMsg = error.message || "Network error";
+      this.emit("loginError", { error: errorMsg });
+      return { success: false, error: errorMsg };
+    }
+  }
+  /**
+   * Logout
+   */
+  async logout() {
+    this.emit("logoutStart");
+    try {
+      const token = this.getAuthToken();
+      if (token) {
+        await this.authManager.logout(token);
+      }
+    } catch (error) {
+      this.log("Logout API error:", error);
+    }
+    this.state.user = null;
+    this.state.balance = 0;
+    this.state.isInitialized = false;
+    this.state.isAuthenticated = false;
+    this.storage.remove("auth");
+    this.clearTimers();
+    if (this.state.mode === "embedded") {
+      this.messageBridge.sendToParent("LOGOUT", {
+        timestamp: Date.now()
+      });
+    }
+    this.emit("logoutSuccess");
+  }
+  /**
+   * Check current credit balance
+   */
+  async checkBalance() {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    try {
+      const result = await this.apiClient.get("/balance");
+      if (result.success && result.data) {
+        this.state.balance = result.data.balance;
+        this.emit("balanceUpdate", { balance: this.state.balance });
+        if (this.state.mode === "embedded") {
+          this.messageBridge.sendToParent("BALANCE_UPDATE", {
+            balance: this.state.balance,
+            timestamp: Date.now()
+          });
+        }
+        return { success: true, balance: this.state.balance };
+      } else {
+        return { success: false, error: result.message || "Failed to get balance" };
+      }
+    } catch (error) {
+      this.emit("error", { type: "balance", error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+  /**
+   * Spend credits
+   */
+  async spendCredits(amount, description, referenceId) {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    if (amount <= 0) {
+      return { success: false, error: "Invalid amount" };
+    }
+    if (amount > this.state.balance) {
+      return { success: false, error: "Insufficient credits" };
+    }
+    try {
+      const result = await this.apiClient.post("/spend", {
+        amount,
+        description,
+        reference_id: referenceId
+      });
+      if (result.success && result.data) {
+        const previousBalance = this.state.balance;
+        this.state.balance = result.data.new_balance;
+        this.emit("creditsSpent", {
+          amount,
+          description,
+          previousBalance,
+          newBalance: this.state.balance,
+          transaction: result.data.transaction
+        });
+        if (this.state.mode === "embedded") {
+          this.messageBridge.sendToParent("CREDITS_SPENT", {
+            amount,
+            description,
+            newBalance: this.state.balance,
+            timestamp: Date.now()
+          });
+        }
+        return {
+          success: true,
+          newBalance: this.state.balance,
+          transaction: result.data.transaction
+        };
+      } else {
+        return { success: false, error: result.message || "Failed to spend credits" };
+      }
+    } catch (error) {
+      this.emit("error", { type: "spend", error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+  /**
+   * Add credits
+   */
+  async addCredits(amount, type = "purchase", description) {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    if (amount <= 0) {
+      return { success: false, error: "Invalid amount" };
+    }
+    try {
+      const result = await this.apiClient.post("/add", {
+        amount,
+        type,
+        description
+      });
+      if (result.success && result.data) {
+        const previousBalance = this.state.balance;
+        this.state.balance = result.data.new_balance;
+        this.emit("creditsAdded", {
+          amount,
+          type,
+          description,
+          previousBalance,
+          newBalance: this.state.balance,
+          transaction: result.data.transaction
+        });
+        if (this.state.mode === "embedded") {
+          this.messageBridge.sendToParent("CREDITS_ADDED", {
+            amount,
+            type,
+            description,
+            newBalance: this.state.balance,
+            timestamp: Date.now()
+          });
+        }
+        return {
+          success: true,
+          newBalance: this.state.balance,
+          transaction: result.data.transaction
+        };
+      } else {
+        return { success: false, error: result.message || "Failed to add credits" };
+      }
+    } catch (error) {
+      this.emit("error", { type: "add", error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+  /**
+   * Get transaction history
+   */
+  async getHistory(page = 1, limit = 10) {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    try {
+      const result = await this.apiClient.get(`/history?page=${page}&limit=${limit}`);
+      if (result.success && result.data) {
+        return {
+          success: true,
+          transactions: result.data.transactions,
+          total: result.data.total,
+          page: result.data.current_page,
+          pages: result.data.total_pages
+        };
+      } else {
+        return { success: false, error: result.message || "Failed to get history" };
+      }
+    } catch (error) {
+      this.emit("error", { type: "history", error: error.message });
+      return { success: false, error: error.message };
+    }
+  }
+  /**
+   * Refresh JWT token
+   */
+  async refreshToken() {
+    const auth = this.storage.get("auth");
+    if (!auth?.refreshToken) {
+      return false;
+    }
+    try {
+      const result = await this.authManager.refreshToken(auth.refreshToken);
+      if (result.success && result.tokens) {
+        this.storage.set("auth", {
+          ...auth,
+          token: result.tokens.access_token,
+          refreshToken: result.tokens.refresh_token
+        });
+        this.emit("tokenRefreshed");
+        if (this.state.mode === "embedded") {
+          this.messageBridge.sendToParent("JWT_TOKEN_REFRESHED", {
+            token: result.tokens.access_token,
+            timestamp: Date.now()
+          });
+        }
+        return true;
+      }
+    } catch (error) {
+      this.log("Token refresh failed:", error);
+    }
+    this.emit("tokenExpired");
+    this.config.onTokenExpired();
+    return false;
+  }
+  /**
+   * Start token refresh timer
+   */
+  startTokenRefreshTimer() {
+    this.clearTokenTimer();
+    this.tokenTimer = setInterval(async () => {
+      await this.refreshToken();
+    }, this.config.tokenRefreshInterval);
+  }
+  /**
+   * Start balance refresh timer
+   */
+  startBalanceRefreshTimer() {
+    this.clearBalanceTimer();
+    this.balanceTimer = setInterval(async () => {
+      await this.checkBalance();
+    }, this.config.balanceRefreshInterval);
+  }
+  /**
+   * Clear all timers
+   */
+  clearTimers() {
+    this.clearTokenTimer();
+    this.clearBalanceTimer();
+  }
+  clearTokenTimer() {
+    if (this.tokenTimer) {
+      clearInterval(this.tokenTimer);
+      this.tokenTimer = void 0;
+    }
+  }
+  clearBalanceTimer() {
+    if (this.balanceTimer) {
+      clearInterval(this.balanceTimer);
+      this.balanceTimer = void 0;
+    }
+  }
+  /**
+   * Set up internal event handlers
+   */
+  setupEventHandlers() {
+    if (this.state.isInIframe) {
+      this.messageBridge.on("REFRESH_BALANCE", () => {
+        this.checkBalance();
+      });
+      this.messageBridge.on("GET_STATUS", () => {
+        this.messageBridge.sendToParent("STATUS_RESPONSE", {
+          initialized: this.state.isInitialized,
+          mode: this.state.mode,
+          user: this.state.user,
+          balance: this.state.balance,
+          timestamp: Date.now()
+        });
+      });
+      this.messageBridge.on("CLEAR_STORAGE", () => {
+        this.logout();
+      });
+    }
+  }
+  /**
+   * Get current state
+   */
+  getState() {
+    return { ...this.state };
+  }
+  /**
+   * Debug logging
+   */
+  log(...args) {
+    if (this.config.debug) {
+      console.log("[CreditSystem]", ...args);
+    }
+  }
+  /**
+   * Destroy the client
+   */
+  destroy() {
+    this.clearTimers();
+    this.messageBridge.destroy();
+    this.removeAllListeners();
+    this.state.isInitialized = false;
+  }
+};
+
+// src/react/useCreditSystem.tsx
+var import_react = require("react");
+function useCreditSystem(config) {
+  const clientRef = (0, import_react.useRef)(null);
+  const [isInitialized, setIsInitialized] = (0, import_react.useState)(false);
+  const [isAuthenticated, setIsAuthenticated] = (0, import_react.useState)(false);
+  const [mode, setMode] = (0, import_react.useState)(null);
+  const [user, setUser] = (0, import_react.useState)(null);
+  const [balance, setBalance] = (0, import_react.useState)(null);
+  const [loading, setLoading] = (0, import_react.useState)(true);
+  const [error, setError] = (0, import_react.useState)(null);
+  (0, import_react.useEffect)(() => {
+    const client = new CreditSystemClient({
+      ...config,
+      autoInit: true
+    });
+    clientRef.current = client;
+    client.on("ready", (data) => {
+      if (data) {
+        setIsInitialized(true);
+        setIsAuthenticated(true);
+        setUser(data.user);
+        setMode(data.mode);
+        setLoading(false);
+      }
+    });
+    client.on("modeDetected", (data) => {
+      if (data) {
+        setMode(data.mode);
+      }
+    });
+    client.on("authRequired", () => {
+      setIsAuthenticated(false);
+      setLoading(false);
+    });
+    client.on("loginSuccess", (data) => {
+      if (data) {
+        setIsAuthenticated(true);
+        setUser(data.user);
+        setError(null);
+      }
+    });
+    client.on("loginError", (data) => {
+      if (data) {
+        setError(data.error);
+      }
+    });
+    client.on("logoutSuccess", () => {
+      setIsAuthenticated(false);
+      setUser(null);
+      setBalance(null);
+    });
+    client.on("balanceUpdate", (data) => {
+      if (data) {
+        setBalance(data.balance);
+      }
+    });
+    client.on("error", (data) => {
+      if (data) {
+        setError(`${data.type}: ${data.error}`);
+      }
+    });
+    client.on("tokenExpired", () => {
+      setIsAuthenticated(false);
+      setError("Session expired. Please login again.");
+    });
+    return () => {
+      client.destroy();
+    };
+  }, []);
+  const login = (0, import_react.useCallback)(async (email, password) => {
+    setLoading(true);
+    setError(null);
+    if (!clientRef.current) {
+      setLoading(false);
+      return { success: false, error: "Client not initialized" };
+    }
+    const result = await clientRef.current.login(email, password);
+    setLoading(false);
+    return result;
+  }, []);
+  const logout = (0, import_react.useCallback)(async () => {
+    if (!clientRef.current) return;
+    await clientRef.current.logout();
+  }, []);
+  const checkBalance = (0, import_react.useCallback)(async () => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.checkBalance();
+  }, []);
+  const spendCredits = (0, import_react.useCallback)(async (amount, description, referenceId) => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.spendCredits(amount, description, referenceId);
+  }, []);
+  const addCredits = (0, import_react.useCallback)(async (amount, type, description) => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.addCredits(amount, type, description);
+  }, []);
+  const getHistory = (0, import_react.useCallback)(async (page, limit) => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.getHistory(page, limit);
+  }, []);
+  return {
+    isInitialized,
+    isAuthenticated,
+    mode,
+    user,
+    balance,
+    loading,
+    error,
+    login,
+    logout,
+    checkBalance,
+    spendCredits,
+    addCredits,
+    getHistory
+  };
+}
+
+// src/react/CreditSystemProvider.tsx
+var import_react2 = require("react");
+var import_jsx_runtime = require("react/jsx-runtime");
+var CreditSystemContext = (0, import_react2.createContext)(void 0);
+function CreditSystemProvider({ children, config }) {
+  const creditSystem = useCreditSystem(config);
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditSystemContext.Provider, { value: creditSystem, children });
+}
+function useCreditContext() {
+  const context = (0, import_react2.useContext)(CreditSystemContext);
+  if (!context) {
+    throw new Error("useCreditContext must be used within a CreditSystemProvider");
+  }
+  return context;
+}
+
+// src/parent/ParentIntegrator.ts
+var ParentIntegrator = class {
+  constructor(config) {
+    this.iframe = null;
+    this.config = config;
+    this.setupMessageListener();
+  }
+  /**
+   * Attach to an iframe element
+   */
+  attachToIframe(iframe) {
+    this.iframe = iframe;
+    iframe.addEventListener("load", () => {
+      if (this.config.debug) {
+        console.log("[ParentIntegrator] Iframe loaded");
+      }
+    });
+  }
+  /**
+   * Set up message listener for iframe communication
+   */
+  setupMessageListener() {
+    this.messageHandler = async (event) => {
+      if (!this.isValidOrigin(event.origin)) {
+        if (this.config.debug) {
+          console.warn("[ParentIntegrator] Invalid origin:", event.origin);
+        }
+        return;
+      }
+      if (!event.data || !event.data.type) return;
+      if (this.config.debug) {
+        console.log("[ParentIntegrator] Received message:", event.data.type, event.data);
+      }
+      switch (event.data.type) {
+        case "REQUEST_JWT_TOKEN":
+          await this.handleTokenRequest();
+          break;
+        case "CREDIT_SYSTEM_READY":
+          this.handleIframeReady(event.data);
+          break;
+        case "BALANCE_UPDATE":
+          this.handleBalanceUpdate(event.data);
+          break;
+        case "CREDITS_SPENT":
+          this.handleCreditsSpent(event.data);
+          break;
+        case "CREDITS_ADDED":
+          this.handleCreditsAdded(event.data);
+          break;
+        case "JWT_TOKEN_REFRESHED":
+          this.handleTokenRefreshed(event.data);
+          break;
+        case "LOGOUT":
+          this.handleLogout();
+          break;
+        case "ERROR":
+          this.handleError(event.data);
+          break;
+        case "STATUS_RESPONSE":
+          this.handleStatusResponse(event.data);
+          break;
+        default:
+          if (this.config.debug) {
+            console.log("[ParentIntegrator] Unhandled message type:", event.data.type);
+          }
+      }
+    };
+    window.addEventListener("message", this.messageHandler);
+  }
+  /**
+   * Handle JWT token request from iframe
+   */
+  async handleTokenRequest() {
+    if (this.config.debug) {
+      console.log("[ParentIntegrator] Iframe requesting JWT token");
+    }
+    try {
+      const tokenData = await this.config.getJWTToken();
+      if (tokenData) {
+        this.cachedToken = tokenData;
+        this.sendToIframe("JWT_TOKEN_RESPONSE", {
+          token: tokenData.token,
+          refreshToken: tokenData.refreshToken,
+          user: tokenData.user,
+          timestamp: Date.now()
+        });
+        if (this.config.debug) {
+          console.log("[ParentIntegrator] JWT token sent to iframe");
+        }
+      } else {
+        this.sendToIframe("JWT_TOKEN_RESPONSE", {
+          token: null,
+          error: "Authentication required",
+          timestamp: Date.now()
+        });
+        if (this.config.debug) {
+          console.log("[ParentIntegrator] No JWT token available");
+        }
+      }
+    } catch (error) {
+      if (this.config.debug) {
+        console.error("[ParentIntegrator] Error getting JWT token:", error);
+      }
+      this.sendToIframe("JWT_TOKEN_RESPONSE", {
+        token: null,
+        error: error.message || "Failed to get token",
+        timestamp: Date.now()
+      });
+    }
+  }
+  /**
+   * Handle iframe ready event
+   */
+  handleIframeReady(data) {
+    if (this.config.debug) {
+      console.log("[ParentIntegrator] Credit system ready:", data);
+    }
+    if (this.config.onIframeReady) {
+      this.config.onIframeReady();
+    }
+  }
+  /**
+   * Handle balance update
+   */
+  handleBalanceUpdate(data) {
+    if (this.config.onBalanceUpdate) {
+      this.config.onBalanceUpdate(data.balance);
+    }
+  }
+  /**
+   * Handle credits spent
+   */
+  handleCreditsSpent(data) {
+    if (this.config.onCreditsSpent) {
+      this.config.onCreditsSpent(data.amount, data.newBalance);
+    }
+  }
+  /**
+   * Handle credits added
+   */
+  handleCreditsAdded(data) {
+    if (this.config.onCreditsAdded) {
+      this.config.onCreditsAdded(data.amount, data.newBalance);
+    }
+  }
+  /**
+   * Handle token refreshed
+   */
+  handleTokenRefreshed(data) {
+    if (data.token && this.cachedToken) {
+      this.cachedToken.token = data.token;
+    }
+  }
+  /**
+   * Handle logout
+   */
+  handleLogout() {
+    this.cachedToken = void 0;
+    if (this.config.onLogout) {
+      this.config.onLogout();
+    }
+  }
+  /**
+   * Handle error
+   */
+  handleError(data) {
+    if (this.config.onError) {
+      this.config.onError(data.message || "Unknown error");
+    }
+  }
+  /**
+   * Handle status response
+   */
+  handleStatusResponse(data) {
+    if (this.config.debug) {
+      console.log("[ParentIntegrator] Status:", data);
+    }
+  }
+  /**
+   * Send message to iframe
+   */
+  sendToIframe(type, data = {}) {
+    if (!this.iframe || !this.iframe.contentWindow) {
+      if (this.config.debug) {
+        console.warn("[ParentIntegrator] Iframe not ready");
+      }
+      return false;
+    }
+    const message = {
+      type,
+      ...data,
+      timestamp: Date.now()
+    };
+    if (this.config.debug) {
+      console.log("[ParentIntegrator] Sending to iframe:", message);
+    }
+    this.iframe.contentWindow.postMessage(message, "*");
+    return true;
+  }
+  /**
+   * Validate message origin
+   */
+  isValidOrigin(origin) {
+    if (origin === window.location.origin) {
+      return true;
+    }
+    if (this.config.allowedOrigins && this.config.allowedOrigins.length > 0) {
+      return this.config.allowedOrigins.includes(origin);
+    }
+    return true;
+  }
+  /**
+   * Request balance refresh from iframe
+   */
+  refreshBalance() {
+    this.sendToIframe("REFRESH_BALANCE");
+  }
+  /**
+   * Request status from iframe
+   */
+  getStatus() {
+    this.sendToIframe("GET_STATUS");
+  }
+  /**
+   * Clear iframe storage
+   */
+  clearStorage() {
+    this.sendToIframe("CLEAR_STORAGE");
+  }
+  /**
+   * Send custom message to iframe
+   */
+  sendCustomMessage(message, data) {
+    this.sendToIframe("CUSTOM_MESSAGE", { message, ...data });
+  }
+  /**
+   * Destroy the integrator
+   */
+  destroy() {
+    if (this.messageHandler) {
+      window.removeEventListener("message", this.messageHandler);
+    }
+    this.iframe = null;
+    this.cachedToken = void 0;
+  }
+};
+
+// src/index.ts
+var index_default = CreditSystemClient;
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  CreditSystemClient,
+  CreditSystemProvider,
+  ParentIntegrator,
+  useCreditContext,
+  useCreditSystem
+});

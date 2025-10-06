@@ -1,0 +1,433 @@
+import * as react_jsx_runtime from 'react/jsx-runtime';
+import { ReactNode } from 'react';
+
+/**
+ * Type-safe EventEmitter implementation
+ */
+type EventListener<T = any> = (data?: T) => void;
+declare class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
+    private events;
+    /**
+     * Subscribe to an event
+     */
+    on<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
+    /**
+     * Subscribe to an event once
+     */
+    once<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
+    /**
+     * Unsubscribe from an event
+     */
+    off<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
+    /**
+     * Emit an event
+     */
+    emit<K extends keyof Events>(event: K, data?: Events[K]): boolean;
+    /**
+     * Remove all listeners for an event or all events
+     */
+    removeAllListeners<K extends keyof Events>(event?: K): this;
+    /**
+     * Get listener count for an event
+     */
+    listenerCount<K extends keyof Events>(event: K): number;
+}
+
+/**
+ * Supreme AI Credit SDK - Type Definitions
+ */
+interface User {
+    id: number;
+    email: string;
+    name?: string;
+    organization?: string;
+}
+interface AuthTokens {
+    access_token: string;
+    refresh_token: string;
+    expires_in?: number;
+}
+interface AuthResult {
+    success: boolean;
+    user?: User;
+    tokens?: AuthTokens;
+    message?: string;
+    error?: string;
+}
+interface CreditBalance {
+    balance: number;
+    currency?: string;
+    updated_at?: string;
+}
+interface Transaction {
+    id: string;
+    type: 'credit' | 'debit';
+    amount: number;
+    description?: string;
+    reference_id?: string;
+    created_at: string;
+    balance_after: number;
+}
+interface TransactionHistory {
+    transactions: Transaction[];
+    total: number;
+    current_page: number;
+    total_pages: number;
+}
+interface CreditSDKConfig {
+    apiBaseUrl?: string;
+    authUrl?: string;
+    parentTimeout?: number;
+    tokenRefreshInterval?: number;
+    balanceRefreshInterval?: number;
+    allowedOrigins?: string[];
+    autoInit?: boolean;
+    debug?: boolean;
+    storagePrefix?: string;
+    mode?: 'auto' | 'embedded' | 'standalone';
+    onAuthRequired?: () => void;
+    onTokenExpired?: () => void;
+}
+interface SDKState {
+    mode: 'embedded' | 'standalone' | null;
+    isInIframe: boolean;
+    isInitialized: boolean;
+    isAuthenticated: boolean;
+    user: User | null;
+    balance: number;
+}
+interface IframeMessage {
+    type: string;
+    timestamp: number;
+    [key: string]: any;
+}
+interface TokenRequestMessage extends IframeMessage {
+    type: 'REQUEST_JWT_TOKEN';
+    origin: string;
+}
+interface TokenResponseMessage extends IframeMessage {
+    type: 'JWT_TOKEN_RESPONSE';
+    token?: string;
+    refreshToken?: string;
+    user?: User;
+    error?: string;
+}
+type CreditSDKEvents = {
+    'ready': {
+        user: User | null;
+        mode: string;
+    };
+    'modeDetected': {
+        mode: string;
+    };
+    'authRequired': void;
+    'loginSuccess': {
+        user: User;
+    };
+    'loginError': {
+        error: string;
+    };
+    'logoutSuccess': void;
+    'balanceUpdate': {
+        balance: number;
+    };
+    'creditsSpent': {
+        amount: number;
+        description?: string;
+        previousBalance: number;
+        newBalance: number;
+        transaction?: Transaction;
+    };
+    'creditsAdded': {
+        amount: number;
+        type: string;
+        description?: string;
+        previousBalance: number;
+        newBalance: number;
+        transaction?: Transaction;
+    };
+    'tokenRefreshed': void;
+    'tokenExpired': void;
+    'error': {
+        type: string;
+        error: string;
+    };
+    'waitingForParent': void;
+    'parentTimeout': void;
+    'parentAuthRequired': {
+        error: string;
+    };
+};
+interface ApiResponse<T = any> {
+    success: boolean;
+    data?: T;
+    message?: string;
+    error?: string;
+}
+interface BalanceResponse {
+    balance: number;
+    currency?: string;
+}
+interface SpendResponse {
+    new_balance: number;
+    transaction: Transaction;
+}
+interface AddCreditsResponse {
+    new_balance: number;
+    transaction: Transaction;
+}
+interface OperationResult {
+    success: boolean;
+    error?: string;
+}
+interface BalanceResult extends OperationResult {
+    balance?: number;
+}
+interface SpendResult extends OperationResult {
+    newBalance?: number;
+    transaction?: Transaction;
+}
+interface AddResult extends OperationResult {
+    newBalance?: number;
+    transaction?: Transaction;
+}
+interface HistoryResult extends OperationResult {
+    transactions?: Transaction[];
+    total?: number;
+    page?: number;
+    pages?: number;
+}
+interface UseCreditSystemReturn {
+    isInitialized: boolean;
+    isAuthenticated: boolean;
+    mode: 'embedded' | 'standalone' | null;
+    user: User | null;
+    balance: number | null;
+    loading: boolean;
+    error: string | null;
+    login: (email: string, password: string) => Promise<AuthResult>;
+    logout: () => Promise<void>;
+    checkBalance: () => Promise<BalanceResult>;
+    spendCredits: (amount: number, description?: string, referenceId?: string) => Promise<SpendResult>;
+    addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
+    getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
+}
+
+/**
+ * Supreme AI Credit System SDK - Main Client
+ */
+
+declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
+    private config;
+    private state;
+    private storage;
+    private messageBridge;
+    private authManager;
+    private apiClient;
+    private tokenTimer?;
+    private balanceTimer?;
+    private parentResponseReceived;
+    constructor(config?: CreditSDKConfig);
+    /**
+     * Initialize the credit system
+     */
+    initialize(): Promise<void>;
+    /**
+     * Initialize embedded mode (iframe)
+     */
+    private initializeEmbeddedMode;
+    /**
+     * Handle JWT token response from parent
+     */
+    private handleParentTokenResponse;
+    /**
+     * Initialize standalone mode
+     */
+    private initializeStandaloneMode;
+    /**
+     * Initialize with valid JWT token
+     */
+    private initializeWithToken;
+    /**
+     * Get current auth token
+     */
+    private getAuthToken;
+    /**
+     * Login with credentials (standalone mode)
+     */
+    login(email: string, password: string): Promise<AuthResult>;
+    /**
+     * Logout
+     */
+    logout(): Promise<void>;
+    /**
+     * Check current credit balance
+     */
+    checkBalance(): Promise<BalanceResult>;
+    /**
+     * Spend credits
+     */
+    spendCredits(amount: number, description?: string, referenceId?: string): Promise<SpendResult>;
+    /**
+     * Add credits
+     */
+    addCredits(amount: number, type?: string, description?: string): Promise<AddResult>;
+    /**
+     * Get transaction history
+     */
+    getHistory(page?: number, limit?: number): Promise<HistoryResult>;
+    /**
+     * Refresh JWT token
+     */
+    private refreshToken;
+    /**
+     * Start token refresh timer
+     */
+    private startTokenRefreshTimer;
+    /**
+     * Start balance refresh timer
+     */
+    private startBalanceRefreshTimer;
+    /**
+     * Clear all timers
+     */
+    private clearTimers;
+    private clearTokenTimer;
+    private clearBalanceTimer;
+    /**
+     * Set up internal event handlers
+     */
+    private setupEventHandlers;
+    /**
+     * Get current state
+     */
+    getState(): SDKState;
+    /**
+     * Debug logging
+     */
+    private log;
+    /**
+     * Destroy the client
+     */
+    destroy(): void;
+}
+
+/**
+ * React Hook for Supreme AI Credit System SDK
+ */
+
+declare function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn;
+
+interface CreditSystemProviderProps {
+    children: ReactNode;
+    config?: CreditSDKConfig;
+}
+declare function CreditSystemProvider({ children, config }: CreditSystemProviderProps): react_jsx_runtime.JSX.Element;
+declare function useCreditContext(): UseCreditSystemReturn;
+
+/**
+ * ParentIntegrator - Helper for parent pages to integrate with iframe credit system
+ */
+
+interface ParentConfig {
+    getJWTToken: () => Promise<{
+        token: string;
+        refreshToken: string;
+        user: User;
+    } | null>;
+    allowedOrigins?: string[];
+    debug?: boolean;
+    onIframeReady?: () => void;
+    onBalanceUpdate?: (balance: number) => void;
+    onCreditsSpent?: (amount: number, newBalance: number) => void;
+    onCreditsAdded?: (amount: number, newBalance: number) => void;
+    onLogout?: () => void;
+    onError?: (error: string) => void;
+}
+declare class ParentIntegrator {
+    private config;
+    private iframe;
+    private messageHandler?;
+    private cachedToken?;
+    constructor(config: ParentConfig);
+    /**
+     * Attach to an iframe element
+     */
+    attachToIframe(iframe: HTMLIFrameElement): void;
+    /**
+     * Set up message listener for iframe communication
+     */
+    private setupMessageListener;
+    /**
+     * Handle JWT token request from iframe
+     */
+    private handleTokenRequest;
+    /**
+     * Handle iframe ready event
+     */
+    private handleIframeReady;
+    /**
+     * Handle balance update
+     */
+    private handleBalanceUpdate;
+    /**
+     * Handle credits spent
+     */
+    private handleCreditsSpent;
+    /**
+     * Handle credits added
+     */
+    private handleCreditsAdded;
+    /**
+     * Handle token refreshed
+     */
+    private handleTokenRefreshed;
+    /**
+     * Handle logout
+     */
+    private handleLogout;
+    /**
+     * Handle error
+     */
+    private handleError;
+    /**
+     * Handle status response
+     */
+    private handleStatusResponse;
+    /**
+     * Send message to iframe
+     */
+    sendToIframe(type: string, data?: Record<string, any>): boolean;
+    /**
+     * Validate message origin
+     */
+    private isValidOrigin;
+    /**
+     * Request balance refresh from iframe
+     */
+    refreshBalance(): void;
+    /**
+     * Request status from iframe
+     */
+    getStatus(): void;
+    /**
+     * Clear iframe storage
+     */
+    clearStorage(): void;
+    /**
+     * Send custom message to iframe
+     */
+    sendCustomMessage(message: string, data?: any): void;
+    /**
+     * Destroy the integrator
+     */
+    destroy(): void;
+}
+
+/**
+ * Supreme AI Credit System SDK
+ *
+ * @packageDocumentation
+ */
+
+export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type SDKState, type SpendResponse, type SpendResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, CreditSystemClient as default, useCreditContext, useCreditSystem };

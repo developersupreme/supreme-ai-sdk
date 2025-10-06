@@ -5,7 +5,7 @@ yarn.lock
 pnpm-lock.yaml
 
 # Build output
-dist/
+# dist/ - REMOVED: dist folder is needed for GitHub package installation
 build/
 *.tsbuildinfo
 
