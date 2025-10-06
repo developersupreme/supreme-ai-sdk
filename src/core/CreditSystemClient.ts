@@ -70,11 +70,14 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.setupEventHandlers();
 
     // Auto-initialize if configured
+    // Defer initialization to next tick to allow event listeners to be attached
     if (this.config.autoInit) {
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => this.initialize());
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(() => this.initialize(), 0);
+        });
       } else {
-        this.initialize();
+        setTimeout(() => this.initialize(), 0);
       }
     }
   }
