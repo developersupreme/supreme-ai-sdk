@@ -75,6 +75,10 @@ interface TransactionHistory {
     current_page: number;
     total_pages: number;
 }
+interface SDKFeatures {
+    credits?: boolean;
+    personas?: boolean;
+}
 interface CreditSDKConfig {
     apiBaseUrl?: string;
     authUrl?: string;
@@ -86,6 +90,7 @@ interface CreditSDKConfig {
     debug?: boolean;
     storagePrefix?: string;
     mode?: 'auto' | 'embedded' | 'standalone';
+    features?: SDKFeatures;
     onAuthRequired?: () => void;
     onTokenExpired?: () => void;
 }
@@ -96,6 +101,7 @@ interface SDKState {
     isAuthenticated: boolean;
     user: User | null;
     balance: number;
+    personas: Persona[];
 }
 interface IframeMessage {
     type: string;
@@ -146,6 +152,12 @@ type CreditSDKEvents = {
         previousBalance: number;
         newBalance: number;
         transaction?: Transaction;
+    };
+    'personasLoaded': {
+        personas: Persona[];
+    };
+    'personasFailed': {
+        error: string;
     };
     'tokenRefreshed': void;
     'tokenExpired': void;
@@ -204,6 +216,7 @@ interface UseCreditSystemReturn {
     mode: 'embedded' | 'standalone' | null;
     user: User | null;
     balance: number | null;
+    personas: Persona[];
     loading: boolean;
     error: string | null;
     login: (email: string, password: string) => Promise<AuthResult>;
@@ -212,6 +225,8 @@ interface UseCreditSystemReturn {
     spendCredits: (amount: number, description?: string, referenceId?: string) => Promise<SpendResult>;
     addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
     getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
+    getPersonas: () => Promise<PersonasResult>;
+    getPersonaById: (id: number) => Promise<PersonaResult>;
 }
 interface Persona {
     id: number;
@@ -240,6 +255,7 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     private messageBridge;
     private authManager;
     private apiClient;
+    private personasClient;
     private tokenTimer?;
     private balanceTimer?;
     private parentResponseReceived;
@@ -292,6 +308,18 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      * Get transaction history
      */
     getHistory(page?: number, limit?: number): Promise<HistoryResult>;
+    /**
+     * Load personas for authenticated user
+     */
+    private loadPersonas;
+    /**
+     * Get all personas for authenticated user
+     */
+    getPersonas(): Promise<PersonasResult>;
+    /**
+     * Get specific persona by ID
+     */
+    getPersonaById(id: number): Promise<PersonaResult>;
     /**
      * Refresh JWT token
      */

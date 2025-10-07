@@ -12,7 +12,10 @@ import type {
   SpendResult,
   AddResult,
   HistoryResult,
-  UseCreditSystemReturn
+  UseCreditSystemReturn,
+  Persona,
+  PersonasResult,
+  PersonaResult
 } from '../types';
 
 export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn {
@@ -23,6 +26,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
   const [mode, setMode] = useState<'embedded' | 'standalone' | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +84,18 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     client.on('balanceUpdate', (data) => {
       if (data) {
         setBalance(data.balance);
+      }
+    });
+
+    client.on('personasLoaded', (data) => {
+      if (data) {
+        setPersonas(data.personas);
+      }
+    });
+
+    client.on('personasFailed', (data) => {
+      if (data) {
+        console.error('Failed to load personas:', data.error);
       }
     });
 
@@ -170,12 +186,31 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     return await clientRef.current.getHistory(page, limit);
   }, []);
 
+  // Get personas
+  const getPersonas = useCallback(async (): Promise<PersonasResult> => {
+    if (!clientRef.current) {
+      return { success: false, error: 'Client not initialized' };
+    }
+
+    return await clientRef.current.getPersonas();
+  }, []);
+
+  // Get persona by ID
+  const getPersonaById = useCallback(async (id: number): Promise<PersonaResult> => {
+    if (!clientRef.current) {
+      return { success: false, error: 'Client not initialized' };
+    }
+
+    return await clientRef.current.getPersonaById(id);
+  }, []);
+
   return {
     isInitialized,
     isAuthenticated,
     mode,
     user,
     balance,
+    personas,
     loading,
     error,
     login,
@@ -183,6 +218,8 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     checkBalance,
     spendCredits,
     addCredits,
-    getHistory
+    getHistory,
+    getPersonas,
+    getPersonaById
   };
 }

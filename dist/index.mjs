@@ -497,6 +497,154 @@ var StorageManager = class {
   }
 };
 
+// src/core/PersonasClient.ts
+var PersonasClient = class {
+  constructor(config) {
+    this.apiBaseUrl = config.apiBaseUrl;
+    this.getAuthToken = config.getAuthToken;
+    this.debug = config.debug || false;
+  }
+  /**
+   * Log messages if debug mode is enabled
+   */
+  log(...args) {
+    if (this.debug) {
+      console.log("[PersonasClient]", ...args);
+    }
+  }
+  /**
+   * Make authenticated API request
+   */
+  async makeRequest(endpoint, options = {}) {
+    const token = this.getAuthToken();
+    if (!token) {
+      this.log("\u274C No authentication token available");
+      return {
+        success: false,
+        error: "Authentication required"
+      };
+    }
+    try {
+      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}${endpoint}`);
+      const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...options.headers
+        }
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        this.log(`\u2705 Request successful: ${endpoint}`);
+        return {
+          success: true,
+          data: data.data,
+          message: data.message
+        };
+      } else {
+        this.log(`\u274C Request failed: ${data.message || "Unknown error"}`);
+        return {
+          success: false,
+          error: data.message || "Request failed"
+        };
+      }
+    } catch (error) {
+      this.log(`\u274C Network error: ${error.message}`);
+      return {
+        success: false,
+        error: error.message || "Network error"
+      };
+    }
+  }
+  /**
+   * Get all personas
+   */
+  async getPersonas() {
+    this.log("\u{1F3AD} Fetching all personas...");
+    const token = this.getAuthToken();
+    if (!token) {
+      this.log("\u274C No authentication token available");
+      return {
+        success: false,
+        error: "Authentication required"
+      };
+    }
+    try {
+      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}/personas/jwt/list`);
+      const response = await fetch(`${this.apiBaseUrl}/personas/jwt/list`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        }
+      });
+      if (!response.ok) {
+        this.log(`\u274C HTTP error: ${response.status}`);
+        return {
+          success: false,
+          error: `HTTP error: ${response.status}`
+        };
+      }
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        this.log(`\u2705 Fetched ${data.length} personas`);
+        return {
+          success: true,
+          personas: data
+        };
+      }
+      if (data.success && data.data) {
+        this.log(`\u2705 Fetched ${data.data.length} personas`);
+        return {
+          success: true,
+          personas: data.data
+        };
+      }
+      this.log(`\u274C Unexpected response format`);
+      return {
+        success: false,
+        error: "Unexpected response format"
+      };
+    } catch (error) {
+      this.log(`\u274C Error fetching personas: ${error.message}`);
+      return {
+        success: false,
+        error: error.message || "Unknown error"
+      };
+    }
+  }
+  /**
+   * Get a specific persona by ID
+   */
+  async getPersonaById(id) {
+    this.log(`\u{1F3AD} Fetching persona with ID: ${id}`);
+    try {
+      const response = await this.makeRequest(`/get-persona/${id}`);
+      if (response.success && response.data) {
+        this.log(`\u2705 Fetched persona: ${response.data.name || "Unknown"}`);
+        return {
+          success: true,
+          persona: response.data
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || "Failed to fetch persona"
+        };
+      }
+    } catch (error) {
+      this.log(`\u274C Error fetching persona: ${error.message}`);
+      return {
+        success: false,
+        error: error.message || "Unknown error"
+      };
+    }
+  }
+};
+
 // src/core/CreditSystemClient.ts
 var CreditSystemClient = class extends EventEmitter {
   constructor(config = {}) {
@@ -516,6 +664,12 @@ var CreditSystemClient = class extends EventEmitter {
       debug: config.debug || false,
       storagePrefix: config.storagePrefix || "creditSystem_",
       mode: config.mode || "auto",
+      features: {
+        credits: config.features?.credits !== false,
+        // Default true
+        personas: config.features?.personas !== false
+        // Default true
+      },
       onAuthRequired: config.onAuthRequired || (() => {
       }),
       onTokenExpired: config.onTokenExpired || (() => {
@@ -527,12 +681,19 @@ var CreditSystemClient = class extends EventEmitter {
       isInitialized: false,
       isAuthenticated: false,
       user: null,
-      balance: 0
+      balance: 0,
+      personas: []
     };
     this.storage = new StorageManager(this.config.storagePrefix, this.config.debug);
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
     this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
     this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);
+    const personasBaseUrl = this.config.apiBaseUrl.replace("/secure-credits/jwt", "");
+    this.personasClient = new PersonasClient({
+      apiBaseUrl: personasBaseUrl,
+      getAuthToken: () => this.getAuthToken(),
+      debug: this.config.debug
+    });
     this.setupEventHandlers();
     if (this.config.autoInit) {
       if (document.readyState === "loading") {
@@ -671,9 +832,14 @@ var CreditSystemClient = class extends EventEmitter {
   initializeWithToken() {
     this.state.isInitialized = true;
     this.startTokenRefreshTimer();
-    this.checkBalance();
-    if (this.config.balanceRefreshInterval > 0) {
-      this.startBalanceRefreshTimer();
+    if (this.config.features.credits) {
+      this.checkBalance();
+      if (this.config.balanceRefreshInterval > 0) {
+        this.startBalanceRefreshTimer();
+      }
+    }
+    if (this.config.features.personas) {
+      this.loadPersonas();
     }
     this.emit("ready", {
       user: this.state.user,
@@ -932,6 +1098,61 @@ var CreditSystemClient = class extends EventEmitter {
       return { success: false, error: error.message };
     }
   }
+  // ===================================================================
+  // PERSONAS METHODS
+  // ===================================================================
+  /**
+   * Load personas for authenticated user
+   */
+  async loadPersonas() {
+    this.log("\u{1F3AD} Loading personas...");
+    try {
+      const result = await this.personasClient.getPersonas();
+      if (result.success && result.personas) {
+        this.state.personas = result.personas;
+        this.log(`\u2705 Loaded ${result.personas.length} personas`);
+        this.emit("personasLoaded", { personas: result.personas });
+        if (this.state.mode === "embedded") {
+          this.log("\u{1F4E4} Sending PERSONAS_LOADED to parent");
+          this.messageBridge.sendToParent("PERSONAS_LOADED", {
+            personas: result.personas,
+            timestamp: Date.now()
+          });
+        }
+      } else {
+        this.log(`\u274C Failed to load personas: ${result.error}`);
+        this.emit("personasFailed", { error: result.error || "Failed to load personas" });
+      }
+    } catch (error) {
+      this.log(`\u274C Error loading personas: ${error.message}`);
+      this.emit("personasFailed", { error: error.message });
+    }
+  }
+  /**
+   * Get all personas for authenticated user
+   */
+  async getPersonas() {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    this.log("\u{1F3AD} Fetching personas...");
+    const result = await this.personasClient.getPersonas();
+    if (result.success && result.personas) {
+      this.state.personas = result.personas;
+      this.emit("personasLoaded", { personas: result.personas });
+    }
+    return result;
+  }
+  /**
+   * Get specific persona by ID
+   */
+  async getPersonaById(id) {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    this.log(`\u{1F3AD} Fetching persona ID: ${id}`);
+    return await this.personasClient.getPersonaById(id);
+  }
   /**
    * Refresh JWT token
    */
@@ -1058,154 +1279,6 @@ var CreditSystemClient = class extends EventEmitter {
   }
 };
 
-// src/core/PersonasClient.ts
-var PersonasClient = class {
-  constructor(config) {
-    this.apiBaseUrl = config.apiBaseUrl;
-    this.getAuthToken = config.getAuthToken;
-    this.debug = config.debug || false;
-  }
-  /**
-   * Log messages if debug mode is enabled
-   */
-  log(...args) {
-    if (this.debug) {
-      console.log("[PersonasClient]", ...args);
-    }
-  }
-  /**
-   * Make authenticated API request
-   */
-  async makeRequest(endpoint, options = {}) {
-    const token = this.getAuthToken();
-    if (!token) {
-      this.log("\u274C No authentication token available");
-      return {
-        success: false,
-        error: "Authentication required"
-      };
-    }
-    try {
-      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}${endpoint}`);
-      const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
-        ...options,
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          ...options.headers
-        }
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        this.log(`\u2705 Request successful: ${endpoint}`);
-        return {
-          success: true,
-          data: data.data,
-          message: data.message
-        };
-      } else {
-        this.log(`\u274C Request failed: ${data.message || "Unknown error"}`);
-        return {
-          success: false,
-          error: data.message || "Request failed"
-        };
-      }
-    } catch (error) {
-      this.log(`\u274C Network error: ${error.message}`);
-      return {
-        success: false,
-        error: error.message || "Network error"
-      };
-    }
-  }
-  /**
-   * Get all personas
-   */
-  async getPersonas() {
-    this.log("\u{1F3AD} Fetching all personas...");
-    const token = this.getAuthToken();
-    if (!token) {
-      this.log("\u274C No authentication token available");
-      return {
-        success: false,
-        error: "Authentication required"
-      };
-    }
-    try {
-      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}/personas/jwt/list`);
-      const response = await fetch(`${this.apiBaseUrl}/personas/jwt/list`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        }
-      });
-      if (!response.ok) {
-        this.log(`\u274C HTTP error: ${response.status}`);
-        return {
-          success: false,
-          error: `HTTP error: ${response.status}`
-        };
-      }
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        this.log(`\u2705 Fetched ${data.length} personas`);
-        return {
-          success: true,
-          personas: data
-        };
-      }
-      if (data.success && data.data) {
-        this.log(`\u2705 Fetched ${data.data.length} personas`);
-        return {
-          success: true,
-          personas: data.data
-        };
-      }
-      this.log(`\u274C Unexpected response format`);
-      return {
-        success: false,
-        error: "Unexpected response format"
-      };
-    } catch (error) {
-      this.log(`\u274C Error fetching personas: ${error.message}`);
-      return {
-        success: false,
-        error: error.message || "Unknown error"
-      };
-    }
-  }
-  /**
-   * Get a specific persona by ID
-   */
-  async getPersonaById(id) {
-    this.log(`\u{1F3AD} Fetching persona with ID: ${id}`);
-    try {
-      const response = await this.makeRequest(`/get-persona/${id}`);
-      if (response.success && response.data) {
-        this.log(`\u2705 Fetched persona: ${response.data.name || "Unknown"}`);
-        return {
-          success: true,
-          persona: response.data
-        };
-      } else {
-        return {
-          success: false,
-          error: response.error || "Failed to fetch persona"
-        };
-      }
-    } catch (error) {
-      this.log(`\u274C Error fetching persona: ${error.message}`);
-      return {
-        success: false,
-        error: error.message || "Unknown error"
-      };
-    }
-  }
-};
-
 // src/react/useCreditSystem.tsx
 import { useState, useEffect, useCallback, useRef } from "react";
 function useCreditSystem(config) {
@@ -1215,6 +1288,7 @@ function useCreditSystem(config) {
   const [mode, setMode] = useState(null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(null);
+  const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -1261,6 +1335,16 @@ function useCreditSystem(config) {
     client.on("balanceUpdate", (data) => {
       if (data) {
         setBalance(data.balance);
+      }
+    });
+    client.on("personasLoaded", (data) => {
+      if (data) {
+        setPersonas(data.personas);
+      }
+    });
+    client.on("personasFailed", (data) => {
+      if (data) {
+        console.error("Failed to load personas:", data.error);
       }
     });
     client.on("error", (data) => {
@@ -1315,12 +1399,25 @@ function useCreditSystem(config) {
     }
     return await clientRef.current.getHistory(page, limit);
   }, []);
+  const getPersonas = useCallback(async () => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.getPersonas();
+  }, []);
+  const getPersonaById = useCallback(async (id) => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.getPersonaById(id);
+  }, []);
   return {
     isInitialized,
     isAuthenticated,
     mode,
     user,
     balance,
+    personas,
     loading,
     error,
     login,
@@ -1328,7 +1425,9 @@ function useCreditSystem(config) {
     checkBalance,
     spendCredits,
     addCredits,
-    getHistory
+    getHistory,
+    getPersonas,
+    getPersonaById
   };
 }
 

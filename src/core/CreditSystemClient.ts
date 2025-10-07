@@ -7,6 +7,7 @@ import { MessageBridge } from '../utils/MessageBridge';
 import { AuthManager } from '../utils/AuthManager';
 import { ApiClient } from '../utils/ApiClient';
 import { StorageManager } from '../utils/StorageManager';
+import { PersonasClient } from './PersonasClient';
 import type {
   CreditSDKConfig,
   SDKState,
@@ -17,7 +18,10 @@ import type {
   AddResult,
   HistoryResult,
   CreditSDKEvents,
-  TokenResponseMessage
+  TokenResponseMessage,
+  PersonasResult,
+  PersonaResult,
+  Persona
 } from '../types';
 
 export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
@@ -27,6 +31,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   private messageBridge: MessageBridge;
   private authManager: AuthManager;
   private apiClient: ApiClient;
+  private personasClient: PersonasClient;
   private tokenTimer?: NodeJS.Timeout;
   private balanceTimer?: NodeJS.Timeout;
   private parentResponseReceived = false;
@@ -49,6 +54,10 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       debug: config.debug || false,
       storagePrefix: config.storagePrefix || 'creditSystem_',
       mode: config.mode || 'auto',
+      features: {
+        credits: config.features?.credits !== false, // Default true
+        personas: config.features?.personas !== false // Default true
+      },
       onAuthRequired: config.onAuthRequired || (() => {}),
       onTokenExpired: config.onTokenExpired || (() => {})
     };
@@ -60,7 +69,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       isInitialized: false,
       isAuthenticated: false,
       user: null,
-      balance: 0
+      balance: 0,
+      personas: []
     };
 
     // Initialize components
@@ -68,6 +78,14 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
     this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
     this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);
+
+    // Initialize PersonasClient
+    const personasBaseUrl = this.config.apiBaseUrl.replace('/secure-credits/jwt', '');
+    this.personasClient = new PersonasClient({
+      apiBaseUrl: personasBaseUrl,
+      getAuthToken: () => this.getAuthToken(),
+      debug: this.config.debug
+    });
 
     // Set up event handlers
     this.setupEventHandlers();
@@ -244,12 +262,19 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     // Start token refresh timer
     this.startTokenRefreshTimer();
 
-    // Load initial balance
-    this.checkBalance();
+    // Load initial balance only if credits feature is enabled
+    if (this.config.features.credits) {
+      this.checkBalance();
 
-    // Start balance refresh timer if configured
-    if (this.config.balanceRefreshInterval > 0) {
-      this.startBalanceRefreshTimer();
+      // Start balance refresh timer if configured
+      if (this.config.balanceRefreshInterval > 0) {
+        this.startBalanceRefreshTimer();
+      }
+    }
+
+    // Load initial personas if personas feature is enabled
+    if (this.config.features.personas) {
+      this.loadPersonas();
     }
 
     this.emit('ready', {
@@ -561,6 +586,74 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.emit('error', { type: 'history', error: error.message });
       return { success: false, error: error.message };
     }
+  }
+
+  // ===================================================================
+  // PERSONAS METHODS
+  // ===================================================================
+
+  /**
+   * Load personas for authenticated user
+   */
+  private async loadPersonas(): Promise<void> {
+    this.log('🎭 Loading personas...');
+
+    try {
+      const result = await this.personasClient.getPersonas();
+
+      if (result.success && result.personas) {
+        this.state.personas = result.personas;
+        this.log(`✅ Loaded ${result.personas.length} personas`);
+        this.emit('personasLoaded', { personas: result.personas });
+
+        // Notify parent if in embedded mode
+        if (this.state.mode === 'embedded') {
+          this.log('📤 Sending PERSONAS_LOADED to parent');
+          this.messageBridge.sendToParent('PERSONAS_LOADED', {
+            personas: result.personas,
+            timestamp: Date.now()
+          });
+        }
+      } else {
+        this.log(`❌ Failed to load personas: ${result.error}`);
+        this.emit('personasFailed', { error: result.error || 'Failed to load personas' });
+      }
+    } catch (error: any) {
+      this.log(`❌ Error loading personas: ${error.message}`);
+      this.emit('personasFailed', { error: error.message });
+    }
+  }
+
+  /**
+   * Get all personas for authenticated user
+   */
+  async getPersonas(): Promise<PersonasResult> {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    this.log('🎭 Fetching personas...');
+
+    const result = await this.personasClient.getPersonas();
+
+    if (result.success && result.personas) {
+      this.state.personas = result.personas;
+      this.emit('personasLoaded', { personas: result.personas });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get specific persona by ID
+   */
+  async getPersonaById(id: number): Promise<PersonaResult> {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    this.log(`🎭 Fetching persona ID: ${id}`);
+    return await this.personasClient.getPersonaById(id);
   }
 
   /**

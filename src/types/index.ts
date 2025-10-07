@@ -49,6 +49,11 @@ export interface TransactionHistory {
 }
 
 // SDK Configuration
+export interface SDKFeatures {
+  credits?: boolean;
+  personas?: boolean;
+}
+
 export interface CreditSDKConfig {
   apiBaseUrl?: string;
   authUrl?: string;
@@ -60,6 +65,7 @@ export interface CreditSDKConfig {
   debug?: boolean;
   storagePrefix?: string;
   mode?: 'auto' | 'embedded' | 'standalone';
+  features?: SDKFeatures;
   onAuthRequired?: () => void;
   onTokenExpired?: () => void;
 }
@@ -72,6 +78,7 @@ export interface SDKState {
   isAuthenticated: boolean;
   user: User | null;
   balance: number;
+  personas: Persona[];
 }
 
 // Message Types for iframe Communication
@@ -118,6 +125,8 @@ export type CreditSDKEvents = {
     newBalance: number;
     transaction?: Transaction;
   };
+  'personasLoaded': { personas: Persona[] };
+  'personasFailed': { error: string };
   'tokenRefreshed': void;
   'tokenExpired': void;
   'error': { type: string; error: string };
@@ -183,6 +192,7 @@ export interface UseCreditSystemReturn {
   mode: 'embedded' | 'standalone' | null;
   user: User | null;
   balance: number | null;
+  personas: Persona[];
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<AuthResult>;
@@ -191,6 +201,8 @@ export interface UseCreditSystemReturn {
   spendCredits: (amount: number, description?: string, referenceId?: string) => Promise<SpendResult>;
   addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
   getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
+  getPersonas: () => Promise<PersonasResult>;
+  getPersonaById: (id: number) => Promise<PersonaResult>;
 }
 
 // Persona Types
