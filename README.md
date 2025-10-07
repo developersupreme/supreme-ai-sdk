@@ -1,4 +1,4 @@
-# Supreme AI Credit System - JWT Authentication Documentation
+# Supreme AI SDK - Credit System & Personas Management
 
 ## Table of Contents
 
@@ -34,10 +34,12 @@
 
 ## Overview
 
-The Supreme AI Credit System is a comprehensive credit management platform that supports two operational modes:
+The Supreme AI SDK (`@supreme-ai/si-sdk`) is a comprehensive TypeScript SDK for Supreme AI platform features:
 
-1. **Standalone Mode**: Direct application usage with username/password authentication
-2. **Embedded Mode**: iframe integration using parent session-based JWT tokens
+- **Credit System**: Credit management with JWT authentication
+- **Personas Management**: AI persona fetching and management
+- **Dual-Mode Support**: Standalone and embedded (iframe) modes
+- **JWT Authentication**: Secure token-based authentication
 
 Both modes utilize JWT (JSON Web Tokens) for secure API authentication, with different token acquisition methods.
 
@@ -190,7 +192,7 @@ npm install git+https://<personal_access_token>@github.com/developersupreme/supr
 // package.json
 {
     "dependencies": {
-        "@supreme-ai/credit-sdk": "git+https://<personal_access_token>@github.com/developersupreme/supreme-ai-sdk.git",
+        "@supreme-ai/si-sdk": "git+https://<personal_access_token>@github.com/developersupreme/supreme-ai-sdk.git",
         "@tanstack/react-query": "^5.83.0",
         "react": "^18.3.1",
         "react-router-dom": "^6.30.1",
@@ -1095,11 +1097,11 @@ const { isAuthenticated, isEmbedded, user, balance, loading, error } =
 
 ---
 
-### 7. Supreme Credit SDK (NPM Package)
+### 7. Supreme AI SDK (NPM Package)
 
-The Lovable App's custom hook is built on top of the official **Supreme AI SDK**, which provides lower-level functionality.
+The Lovable App's custom hook is built on top of the official **Supreme AI SDK**, which provides lower-level functionality for both credit management and personas.
 
-**Package:** `@supreme-ai/credit-sdk`
+**Package:** `@supreme-ai/si-sdk`
 **Repository:** `github:developersupreme/supreme-ai-sdk`
 
 **Installation:**
@@ -1112,14 +1114,18 @@ npm install git+https://<personal_access_token>@github.com/developersupreme/supr
 npm install github:developersupreme/supreme-ai-sdk
 ```
 
+**Available Clients:**
+- `CreditSystemClient` - Credit management operations
+- `PersonasClient` - Persona fetching and management
+
 #### SDK Core Classes
 
 ##### CreditSystemClient
 
-Main client class for standalone integration.
+Main client class for credit management operations.
 
 ```typescript
-import { CreditSystemClient } from "@supreme-ai/credit-sdk";
+import { CreditSystemClient } from "@supreme-ai/si-sdk";
 
 const client = new CreditSystemClient({
     apiBaseUrl: "http://127.0.0.1:8000/api/secure-credits/jwt",
@@ -1192,7 +1198,7 @@ client.on("tokenRefreshed", () => {
 Helper class for parent pages hosting iframes.
 
 ```typescript
-import { ParentIntegrator } from "@supreme-ai/credit-sdk";
+import { ParentIntegrator } from "@supreme-ai/si-sdk";
 
 const integrator = new ParentIntegrator({
     // Required: Function to get JWT token for iframe
@@ -1238,6 +1244,50 @@ integrator.getStatus();
 integrator.clearStorage();
 integrator.destroy();
 ```
+
+##### PersonasClient
+
+Client class for managing AI personas.
+
+```typescript
+import { PersonasClient, CreditSystemClient } from "@supreme-ai/si-sdk";
+
+// Initialize credit system first (for JWT token)
+const creditClient = new CreditSystemClient({
+    apiBaseUrl: "https://v2.supremegroup.ai/api/secure-credits/jwt",
+    authUrl: "https://v2.supremegroup.ai/api/jwt",
+    autoInit: true
+});
+
+// Initialize personas client (reuses JWT from credit system)
+const personasClient = new PersonasClient({
+    apiBaseUrl: "https://v2.supremegroup.ai/api",
+    getAuthToken: () => {
+        const auth = sessionStorage.getItem('creditSystem_auth');
+        return auth ? JSON.parse(auth).token : null;
+    },
+    debug: true
+});
+
+// Fetch all personas
+const result = await personasClient.getPersonas();
+if (result.success) {
+    console.log("Personas:", result.personas);
+}
+
+// Fetch specific persona
+const persona = await personasClient.getPersonaById(1);
+if (persona.success) {
+    console.log("Persona:", persona.persona);
+}
+```
+
+**PersonasClient Methods:**
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `getPersonas()` | Fetch all personas | `Promise<PersonasResult>` |
+| `getPersonaById(id)` | Fetch persona by ID | `Promise<PersonaResult>` |
 
 ---
 
@@ -1987,7 +2037,7 @@ VITE_DEV_MODE=false
 ### 5. SDK Security Configuration
 
 ```typescript
-import { CreditSystemClient } from "@supreme-ai/credit-sdk";
+import { CreditSystemClient } from "@supreme-ai/si-sdk";
 
 const client = new CreditSystemClient({
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
@@ -2269,19 +2319,20 @@ if (token) {
 
 ## Conclusion
 
-The Supreme AI Credit System provides a robust, secure JWT-based authentication mechanism that seamlessly works in both standalone and embedded modes. The dual-mode architecture allows for maximum flexibility while maintaining security and user experience.
+The Supreme AI SDK (`@supreme-ai/si-sdk`) provides a robust, secure JWT-based authentication mechanism with comprehensive credit management and personas functionality. The dual-mode architecture allows for maximum flexibility while maintaining security and user experience.
 
 **Key Takeaways:**
 
+-   **Credit System**: Complete credit management with balance tracking and transactions
+-   **Personas Management**: Fetch and manage AI personas
 -   **Standalone Mode**: Direct username/password authentication
 -   **Embedded Mode**: Leverages parent Laravel session for seamless SSO
 -   **JWT Tokens**: Short-lived, secure, and automatically refreshed
 -   **PostMessage API**: Secure cross-origin communication for iframes
--   **Balance Display**: Formatted with thousand separators (8,270)
 -   **Transaction History**: Complete audit trail of all credit operations
 
 For additional support or questions, refer to the SDK documentation at:
 
 -   **SDK Repository**: `https://github.com/developersupreme/supreme-ai-sdk`
--   **NPM Package**: `@supreme-ai/credit-sdk`
--   **Installation**: `npm install git+https://<personal_access_token>@github.com/developersupreme/supreme-ai-sdk.git`
+-   **NPM Package**: `@supreme-ai/si-sdk`
+-   **Installation**: `npm install github:developersupreme/supreme-ai-sdk`

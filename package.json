@@ -31,24 +31,25 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
+    "supreme-ai",
     "credit-system",
+    "personas",
     "jwt",
     "iframe",
     "postMessage",
     "api-sdk",
-    "supreme-ai",
     "typescript",
     "react"
   ],
   "author": "Supreme AI",
   "license": "MIT",
-  "homepage": "https://github.com/developersupreme/supreme-credit-sdk#readme",
+  "homepage": "https://github.com/developersupreme/supreme-ai-sdk#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/developersupreme/supreme-credit-sdk.git"
+    "url": "git+https://github.com/developersupreme/supreme-ai-sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/developersupreme/supreme-credit-sdk/issues"
+    "url": "https://github.com/developersupreme/supreme-ai-sdk/issues"
   },
   "publishConfig": {
     "access": "public",
