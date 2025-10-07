@@ -1,12 +1,15 @@
 /**
- * Supreme AI Credit System SDK
+ * Supreme AI SDK - Credit System and Personas Management
  *
  * @packageDocumentation
  */
 
 // Core imports and exports
 import { CreditSystemClient } from './core/CreditSystemClient';
+import { PersonasClient } from './core/PersonasClient';
 export { CreditSystemClient };
+export { PersonasClient };
+export type { PersonasClientConfig } from './core/PersonasClient';
 
 // React exports
 export { useCreditSystem } from './react/useCreditSystem';
@@ -52,6 +55,11 @@ export type {
   SpendResult,
   AddResult,
   HistoryResult,
+
+  // Personas
+  Persona,
+  PersonasResult,
+  PersonaResult,
 
   // React
   UseCreditSystemReturn

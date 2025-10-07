@@ -192,3 +192,22 @@ export interface UseCreditSystemReturn {
   addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
   getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
 }
+
+// Persona Types
+export interface Persona {
+  id: number;
+  name: string;
+  description?: string;
+  category?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+export interface PersonasResult extends OperationResult {
+  personas?: Persona[];
+}
+
+export interface PersonaResult extends OperationResult {
+  persona?: Persona;
+}
