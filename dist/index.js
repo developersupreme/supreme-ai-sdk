@@ -23,6 +23,7 @@ __export(index_exports, {
   CreditSystemClient: () => CreditSystemClient,
   CreditSystemProvider: () => CreditSystemProvider,
   ParentIntegrator: () => ParentIntegrator,
+  PersonasClient: () => PersonasClient,
   default: () => index_default,
   useCreditContext: () => useCreditContext,
   useCreditSystem: () => useCreditSystem
@@ -1089,6 +1090,154 @@ var CreditSystemClient = class extends EventEmitter {
   }
 };
 
+// src/core/PersonasClient.ts
+var PersonasClient = class {
+  constructor(config) {
+    this.apiBaseUrl = config.apiBaseUrl;
+    this.getAuthToken = config.getAuthToken;
+    this.debug = config.debug || false;
+  }
+  /**
+   * Log messages if debug mode is enabled
+   */
+  log(...args) {
+    if (this.debug) {
+      console.log("[PersonasClient]", ...args);
+    }
+  }
+  /**
+   * Make authenticated API request
+   */
+  async makeRequest(endpoint, options = {}) {
+    const token = this.getAuthToken();
+    if (!token) {
+      this.log("\u274C No authentication token available");
+      return {
+        success: false,
+        error: "Authentication required"
+      };
+    }
+    try {
+      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}${endpoint}`);
+      const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...options.headers
+        }
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        this.log(`\u2705 Request successful: ${endpoint}`);
+        return {
+          success: true,
+          data: data.data,
+          message: data.message
+        };
+      } else {
+        this.log(`\u274C Request failed: ${data.message || "Unknown error"}`);
+        return {
+          success: false,
+          error: data.message || "Request failed"
+        };
+      }
+    } catch (error) {
+      this.log(`\u274C Network error: ${error.message}`);
+      return {
+        success: false,
+        error: error.message || "Network error"
+      };
+    }
+  }
+  /**
+   * Get all personas
+   */
+  async getPersonas() {
+    this.log("\u{1F3AD} Fetching all personas...");
+    const token = this.getAuthToken();
+    if (!token) {
+      this.log("\u274C No authentication token available");
+      return {
+        success: false,
+        error: "Authentication required"
+      };
+    }
+    try {
+      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}/personas/jwt/list`);
+      const response = await fetch(`${this.apiBaseUrl}/personas/jwt/list`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        }
+      });
+      if (!response.ok) {
+        this.log(`\u274C HTTP error: ${response.status}`);
+        return {
+          success: false,
+          error: `HTTP error: ${response.status}`
+        };
+      }
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        this.log(`\u2705 Fetched ${data.length} personas`);
+        return {
+          success: true,
+          personas: data
+        };
+      }
+      if (data.success && data.data) {
+        this.log(`\u2705 Fetched ${data.data.length} personas`);
+        return {
+          success: true,
+          personas: data.data
+        };
+      }
+      this.log(`\u274C Unexpected response format`);
+      return {
+        success: false,
+        error: "Unexpected response format"
+      };
+    } catch (error) {
+      this.log(`\u274C Error fetching personas: ${error.message}`);
+      return {
+        success: false,
+        error: error.message || "Unknown error"
+      };
+    }
+  }
+  /**
+   * Get a specific persona by ID
+   */
+  async getPersonaById(id) {
+    this.log(`\u{1F3AD} Fetching persona with ID: ${id}`);
+    try {
+      const response = await this.makeRequest(`/get-persona/${id}`);
+      if (response.success && response.data) {
+        this.log(`\u2705 Fetched persona: ${response.data.name || "Unknown"}`);
+        return {
+          success: true,
+          persona: response.data
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || "Failed to fetch persona"
+        };
+      }
+    } catch (error) {
+      this.log(`\u274C Error fetching persona: ${error.message}`);
+      return {
+        success: false,
+        error: error.message || "Unknown error"
+      };
+    }
+  }
+};
+
 // src/react/useCreditSystem.tsx
 var import_react = require("react");
 function useCreditSystem(config) {
@@ -1485,6 +1634,7 @@ var index_default = CreditSystemClient;
   CreditSystemClient,
   CreditSystemProvider,
   ParentIntegrator,
+  PersonasClient,
   useCreditContext,
   useCreditSystem
 });

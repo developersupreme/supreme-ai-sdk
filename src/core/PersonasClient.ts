@@ -91,21 +91,60 @@ export class PersonasClient {
   async getPersonas(): Promise<PersonasResult> {
     this.log('🎭 Fetching all personas...');
 
-    try {
-      const response = await this.makeRequest<Persona[]>('/get-persona');
+    const token = this.getAuthToken();
+    if (!token) {
+      this.log('❌ No authentication token available');
+      return {
+        success: false,
+        error: 'Authentication required'
+      };
+    }
 
-      if (response.success && response.data) {
-        this.log(`✅ Fetched ${response.data.length} personas`);
-        return {
-          success: true,
-          personas: response.data
-        };
-      } else {
+    try {
+      this.log(`📡 Making request to: ${this.apiBaseUrl}/personas/jwt/list`);
+
+      const response = await fetch(`${this.apiBaseUrl}/personas/jwt/list`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        this.log(`❌ HTTP error: ${response.status}`);
         return {
           success: false,
-          error: response.error || 'Failed to fetch personas'
+          error: `HTTP error: ${response.status}`
         };
       }
+
+      const data = await response.json();
+
+      // Handle direct array response (current Laravel format)
+      if (Array.isArray(data)) {
+        this.log(`✅ Fetched ${data.length} personas`);
+        return {
+          success: true,
+          personas: data
+        };
+      }
+
+      // Handle structured response {success, data}
+      if (data.success && data.data) {
+        this.log(`✅ Fetched ${data.data.length} personas`);
+        return {
+          success: true,
+          personas: data.data
+        };
+      }
+
+      this.log(`❌ Unexpected response format`);
+      return {
+        success: false,
+        error: 'Unexpected response format'
+      };
     } catch (error: any) {
       this.log(`❌ Error fetching personas: ${error.message}`);
       return {

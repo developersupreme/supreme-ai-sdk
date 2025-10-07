@@ -213,6 +213,21 @@ interface UseCreditSystemReturn {
     addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
     getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
 }
+interface Persona {
+    id: number;
+    name: string;
+    description?: string;
+    category?: string;
+    created_at?: string;
+    updated_at?: string;
+    [key: string]: any;
+}
+interface PersonasResult extends OperationResult {
+    personas?: Persona[];
+}
+interface PersonaResult extends OperationResult {
+    persona?: Persona;
+}
 
 /**
  * Supreme AI Credit System SDK - Main Client
@@ -311,6 +326,38 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      * Destroy the client
      */
     destroy(): void;
+}
+
+/**
+ * PersonasClient - Handles persona management
+ */
+
+interface PersonasClientConfig {
+    apiBaseUrl: string;
+    getAuthToken: () => string | null;
+    debug?: boolean;
+}
+declare class PersonasClient {
+    private apiBaseUrl;
+    private getAuthToken;
+    private debug;
+    constructor(config: PersonasClientConfig);
+    /**
+     * Log messages if debug mode is enabled
+     */
+    private log;
+    /**
+     * Make authenticated API request
+     */
+    private makeRequest;
+    /**
+     * Get all personas
+     */
+    getPersonas(): Promise<PersonasResult>;
+    /**
+     * Get a specific persona by ID
+     */
+    getPersonaById(id: number): Promise<PersonaResult>;
 }
 
 /**
@@ -426,9 +473,9 @@ declare class ParentIntegrator {
 }
 
 /**
- * Supreme AI Credit System SDK
+ * Supreme AI SDK - Credit System and Personas Management
  *
  * @packageDocumentation
  */
 
-export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type SDKState, type SpendResponse, type SpendResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, CreditSystemClient as default, useCreditContext, useCreditSystem };
+export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type SDKState, type SpendResponse, type SpendResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, CreditSystemClient as default, useCreditContext, useCreditSystem };
