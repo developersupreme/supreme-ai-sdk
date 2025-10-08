@@ -1,4 +1,6 @@
-# Supreme AI SDK - Credit System & Personas Management
+# Supreme AI SDK - Official Documentation
+
+**Features:** Credit System | Personas | JWT Authentication
 
 ## Table of Contents
 
@@ -6,16 +8,33 @@
 -   [Authentication Flow](#authentication-flow)
     -   [Standalone Mode](#standalone-mode)
     -   [Embedded Mode (iframe)](#embedded-mode-iframe)
--   [Implementation Details](#implementation-details)
+
+### 🔷 Credit System Implementation
+
+-   [Getting Started](#implementation-details)
     -   [Lovable App Setup & Installation](#1-lovable-app-setup--installation)
     -   [JWT Token Structure](#2-jwt-token-structure)
     -   [Custom Hook Implementation](#3-implementation-custom-hook-usesimplecreditsystem)
+-   [Credit System Modes](#credit-system-modes)
     -   [Standalone Mode Implementation](#4-standalone-mode-implementation)
     -   [Embedded Mode Implementation](#5-embedded-mode-implementation)
     -   [SDK Methods Reference](#6-sdk-methods-reference)
-    -   [Supreme Credit SDK](#7-supreme-credit-sdk-npm-package)
+-   [Credit System SDK](#credit-system-sdk)
+    -   [Supreme Credit SDK (NPM Package)](#7-supreme-credit-sdk-npm-package)
     -   [Custom Hook vs SDK Comparison](#8-comparison-custom-hook-vs-sdk)
     -   [Parent Page Integration](#9-parent-page-integration)
+
+### 🔷 Personas System Implementation
+
+-   [Personas & User Details](#10-personas--user-details-integration)
+    -   [Architecture Overview](#architecture-overview)
+    -   [SDK Installation & Setup](#sdk-installation--setup)
+    -   [PersonasClient SDK Usage](#personasclient-sdk-usage)
+    -   [SessionStorage Keys](#sessionstorage-keys)
+    -   [SDK Methods Comparison](#sdk-methods-comparison)
+
+### 🔷 Reference & Security
+
 -   [API Endpoints](#api-endpoints)
 -   [Security Best Practices](#security-best-practices-client-side)
     -   [Token Storage](#1-token-storage)
@@ -34,14 +53,26 @@
 
 ## Overview
 
-The Supreme AI SDK (`@supreme-ai/si-sdk`) is a comprehensive TypeScript SDK for Supreme AI platform features:
+The Supreme AI platform provides a comprehensive SDK (`@supreme-ai/si-sdk`) for managing credits and personas. The platform supports two operational modes:
 
-- **Credit System**: Credit management with JWT authentication
-- **Personas Management**: AI persona fetching and management
-- **Dual-Mode Support**: Standalone and embedded (iframe) modes
-- **JWT Authentication**: Secure token-based authentication
+1. **Standalone Mode**: Direct application usage with username/password authentication
+2. **Embedded Mode**: iframe integration using parent session-based JWT tokens
 
 Both modes utilize JWT (JSON Web Tokens) for secure API authentication, with different token acquisition methods.
+
+### SDK Components
+
+The SDK package includes two separate clients:
+
+1. **CreditSystemClient**: For credit operations (check balance, spend credits, add credits, get history)
+   - Endpoint: `/api/secure-credits/jwt/*`
+   - Methods: `login()`, `checkBalance()`, `spendCredits()`, `addCredits()`, `getHistory()`
+
+2. **PersonasClient**: For persona management (fetch personas, fetch persona by ID)
+   - Endpoint: `/api/personas/jwt/*`
+   - Methods: `getPersonas()`, `getPersonaById(id)`
+
+Both clients share the same JWT authentication infrastructure and sessionStorage keys.
 
 ---
 
@@ -157,6 +188,8 @@ sequenceDiagram
 
 ---
 
+# 🔷 Credit System Implementation
+
 ## Implementation Details
 
 ### 1. Lovable App Setup & Installation
@@ -192,7 +225,7 @@ npm install git+https://<personal_access_token>@github.com/developersupreme/supr
 // package.json
 {
     "dependencies": {
-        "@supreme-ai/si-sdk": "git+https://<personal_access_token>@github.com/developersupreme/supreme-ai-sdk.git",
+        "@supreme-ai/credit-sdk": "git+https://<personal_access_token>@github.com/developersupreme/supreme-ai-sdk.git",
         "@tanstack/react-query": "^5.83.0",
         "react": "^18.3.1",
         "react-router-dom": "^6.30.1",
@@ -215,6 +248,8 @@ npm install github:developersupreme/supreme-ai-sdk
 # .env
 VITE_API_BASE_URL=http://127.0.0.1:8000/api/secure-credits/jwt
 VITE_AUTH_URL=http://127.0.0.1:8000/api/jwt
+VITE_PERSONAS_API_URL=http://127.0.0.1:8000/api
+VITE_ALLOWED_PARENTS=http://localhost:8000,http://127.0.0.1:8000/
 ```
 
 #### Application Setup
@@ -347,6 +382,8 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
 ```
 
 ---
+
+## Credit System Modes
 
 ### 4. Standalone Mode Implementation
 
@@ -644,6 +681,61 @@ const spendCredits = useCallback(
 );
 ```
 
+#### Step 7: Add Credits
+
+```typescript
+const addCredits = useCallback(
+    async (
+        amount: number,
+        type?: string,
+        description?: string
+    ): Promise<OperationResult> => {
+        try {
+            const response = await makeAuthenticatedRequest(
+                `${apiBaseUrl}/add`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        amount,
+                        type,
+                        description,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+            console.log("Add credits response:", data);
+
+            if (response.ok && data.success) {
+                const newBalance =
+                    data.data?.updated_balance ||
+                    data.data?.new_balance ||
+                    data.data?.balance;
+
+                // Update state
+                setBalance(newBalance);
+
+                toast.success(`Successfully added ${amount} credits`);
+
+                return { success: true, balance: newBalance };
+            } else {
+                const errorMsg = data.message || "Failed to add credits";
+                setError(errorMsg);
+                toast.error(errorMsg);
+                return { success: false, error: errorMsg };
+            }
+        } catch (err) {
+            const errorMsg =
+                err instanceof Error ? err.message : "Network error";
+            setError(errorMsg);
+            toast.error(errorMsg);
+            return { success: false, error: errorMsg };
+        }
+    },
+    [apiBaseUrl, makeAuthenticatedRequest]
+);
+```
+
 #### Complete Standalone Usage Example
 
 ```typescript
@@ -664,6 +756,7 @@ export default function CreditSystemDemo() {
         logout,
         checkBalance,
         spendCredits,
+        addCredits,
     } = useSimpleCreditSystem({
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
         authUrl: import.meta.env.VITE_AUTH_URL,
@@ -681,6 +774,13 @@ export default function CreditSystemDemo() {
 
     const handleSpend = async () => {
         const result = await spendCredits(100, "Test purchase");
+        if (result.success) {
+            console.log("New balance:", result.balance);
+        }
+    };
+
+    const handleAdd = async () => {
+        const result = await addCredits(100, "bonus", "Test bonus credits");
         if (result.success) {
             console.log("New balance:", result.balance);
         }
@@ -714,6 +814,7 @@ export default function CreditSystemDemo() {
             <p>Balance: {balance.toLocaleString()} Credits</p>
             <button onClick={checkBalance}>Refresh Balance</button>
             <button onClick={handleSpend}>Spend 100 Credits</button>
+            <button onClick={handleAdd}>Add 100 Credits</button>
             <button onClick={logout}>Logout</button>
         </div>
     );
@@ -955,6 +1056,7 @@ export default function CreditSystemDemo() {
         error,
         checkBalance,
         spendCredits,
+        addCredits,
     } = useSimpleCreditSystem();
 
     // In embedded mode, show waiting state
@@ -983,6 +1085,10 @@ export default function CreditSystemDemo() {
 
             <button onClick={() => spendCredits(100, "Test")}>
                 Spend 100 Credits
+            </button>
+
+            <button onClick={() => addCredits(100, "bonus", "Test bonus")}>
+                Add 100 Credits
             </button>
         </div>
     );
@@ -1097,11 +1203,13 @@ const { isAuthenticated, isEmbedded, user, balance, loading, error } =
 
 ---
 
-### 7. Supreme AI SDK (NPM Package)
+## Credit System SDK
 
-The Lovable App's custom hook is built on top of the official **Supreme AI SDK**, which provides lower-level functionality for both credit management and personas.
+### 7. Supreme Credit SDK (NPM Package)
 
-**Package:** `@supreme-ai/si-sdk`
+The Lovable App's custom hook is built on top of the official **Supreme AI SDK**, which provides lower-level functionality.
+
+**Package:** `@supreme-ai/credit-sdk`
 **Repository:** `github:developersupreme/supreme-ai-sdk`
 
 **Installation:**
@@ -1114,18 +1222,14 @@ npm install git+https://<personal_access_token>@github.com/developersupreme/supr
 npm install github:developersupreme/supreme-ai-sdk
 ```
 
-**Available Clients:**
-- `CreditSystemClient` - Credit management operations
-- `PersonasClient` - Persona fetching and management
-
 #### SDK Core Classes
 
 ##### CreditSystemClient
 
-Main client class for credit management operations.
+Main client class for standalone integration.
 
 ```typescript
-import { CreditSystemClient } from "@supreme-ai/si-sdk";
+import { CreditSystemClient } from "@supreme-ai/credit-sdk";
 
 const client = new CreditSystemClient({
     apiBaseUrl: "http://127.0.0.1:8000/api/secure-credits/jwt",
@@ -1198,7 +1302,7 @@ client.on("tokenRefreshed", () => {
 Helper class for parent pages hosting iframes.
 
 ```typescript
-import { ParentIntegrator } from "@supreme-ai/si-sdk";
+import { ParentIntegrator } from "@supreme-ai/credit-sdk";
 
 const integrator = new ParentIntegrator({
     // Required: Function to get JWT token for iframe
@@ -1244,50 +1348,6 @@ integrator.getStatus();
 integrator.clearStorage();
 integrator.destroy();
 ```
-
-##### PersonasClient
-
-Client class for managing AI personas.
-
-```typescript
-import { PersonasClient, CreditSystemClient } from "@supreme-ai/si-sdk";
-
-// Initialize credit system first (for JWT token)
-const creditClient = new CreditSystemClient({
-    apiBaseUrl: "https://v2.supremegroup.ai/api/secure-credits/jwt",
-    authUrl: "https://v2.supremegroup.ai/api/jwt",
-    autoInit: true
-});
-
-// Initialize personas client (reuses JWT from credit system)
-const personasClient = new PersonasClient({
-    apiBaseUrl: "https://v2.supremegroup.ai/api",
-    getAuthToken: () => {
-        const auth = sessionStorage.getItem('creditSystem_auth');
-        return auth ? JSON.parse(auth).token : null;
-    },
-    debug: true
-});
-
-// Fetch all personas
-const result = await personasClient.getPersonas();
-if (result.success) {
-    console.log("Personas:", result.personas);
-}
-
-// Fetch specific persona
-const persona = await personasClient.getPersonaById(1);
-if (persona.success) {
-    console.log("Persona:", persona.persona);
-}
-```
-
-**PersonasClient Methods:**
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `getPersonas()` | Fetch all personas | `Promise<PersonasResult>` |
-| `getPersonaById(id)` | Fetch persona by ID | `Promise<PersonaResult>` |
 
 ---
 
@@ -1403,234 +1463,476 @@ useEffect(() => {
 
 ---
 
-### 3. Parent Page Integration
+#### Parent Page Implementation
 
 **File:** `C:\Git Projects\supreme-intelligence-v2\resources\views\iframe-parent.blade.php`
 
-**Complete Implementation:**
-
-The parent page uses a two-phase approach to handle iframe communication:
-1. **Inline script** (before iframe) - Sets up early message listener to catch messages before DOM is ready
-2. **DOMContentLoaded script** - Defines handlers and processes pending messages
-
-```html
-<!-- Phase 1: Early Message Listener (Inline, before iframe) -->
-<script>
-    console.log('🚀 Inline parent script loaded EARLY!');
-
-    // Global flags
-    window.parentDOMReady = false;
-    window.pendingMessages = [];
-
-    // Set up message listener IMMEDIATELY
-    window.addEventListener('message', function(event) {
-        console.log('🔔 INLINE listener received message:', event.data, 'from:', event.origin);
-
-        // Origin validation for security
-        const allowedOriginsString = {{ Js::from(env('CORS_ALLOWED_ORIGINS')) }};
-        const allowedOrigins = allowedOriginsString ? allowedOriginsString.split(',').map(origin => origin.trim()) : [];
-
-        if (!allowedOrigins.includes(event.origin) && event.origin !== window.location.origin) {
-            console.error('❌ BLOCKED: Message from untrusted origin:', event.origin);
-            return;
-        }
-
-        console.log('✅ Origin verified!');
-
-        // Store message for processing after DOM ready
-        if (!window.parentDOMReady) {
-            console.log('📦 DOM not ready, storing message:', event.data.type);
-            window.pendingMessages.push(event);
-        } else if (window.handleMessage) {
-            console.log('⚡ DOM ready, handling message immediately');
-            window.handleMessage(event);
-        }
-    });
-
-    console.log('✅ INLINE message listener set up complete');
-</script>
-
-<!-- Iframe Element -->
-<iframe id="creditSystemFrame"
-        src="{{ env('SI_LOVABLE_APP') }}"
-        class="w-full h-[800px]">
-</iframe>
-```
+**JavaScript Integration:**
 
 ```javascript
-// Phase 2: DOMContentLoaded - Define Handlers
-document.addEventListener('DOMContentLoaded', async function() {
-    const iframe = document.getElementById('creditSystemFrame');
-    const laravelUser = @json(auth()->user());
-    const isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+// Get Laravel authenticated user
+const laravelUser = @json(auth()->user());
+const isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
 
-    let parentJWT = null;
-    let parentRefreshToken = null;
-    let parentUser = null;
+// Function to get JWT token for iframe
+async function getJWTTokenForIframe() {
+  if (!laravelUser) {
+    console.error('No Laravel user authenticated');
+    return false;
+  }
 
-    // Get iframe origin
-    const iframeSrc = iframe.src;
-    const iframeOrigin = new URL(iframeSrc).origin;
-
-    // Function to get JWT token from Laravel session
-    async function getJWTTokenForIframe() {
-        if (!laravelUser) {
-            console.error('No Laravel user authenticated');
-            return false;
-        }
-
-        try {
-            // Call session-based JWT generation endpoint
-            const response = await fetch('/iframe/jwt-from-session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({})
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                parentJWT = data.data.tokens.access_token;
-                parentRefreshToken = data.data.tokens.refresh_token;
-                parentUser = data.data.user;
-
-                console.log('✓ JWT tokens generated successfully');
-                return true;
-            } else {
-                console.error('JWT Generation Failed:', data);
-            }
-        } catch (error) {
-            console.error('Failed to generate JWT token:', error);
-        }
-
-        return false;
-    }
-
-    // Unified message handler
-    window.handleMessage = async function(event) {
-        const eventData = event.data;
-
-        if (eventData.type === 'REQUEST_JWT_TOKEN') {
-            await window.handleTokenRequest(event);
-        } else {
-            window.handleOtherMessages(event);
-        }
-    };
-
-    // Handler for JWT token requests
-    window.handleTokenRequest = async function(event) {
-        console.log('🔑 Iframe requesting JWT token');
-
-        // Clear cached tokens and get fresh ones
-        parentJWT = null;
-        parentRefreshToken = null;
-        parentUser = null;
-
-        const success = await getJWTTokenForIframe();
-
-        if (success) {
-            // Send JWT token to iframe
-            const tokenResponse = {
-                type: 'JWT_TOKEN_RESPONSE',
-                token: parentJWT,
-                refreshToken: parentRefreshToken,
-                user: parentUser,
-                timestamp: Date.now()
-            };
-
-            iframe.contentWindow.postMessage(tokenResponse, iframeOrigin);
-            console.log('✓ Fresh JWT token sent to iframe');
-        } else {
-            // Send failure response
-            iframe.contentWindow.postMessage({
-                type: 'JWT_TOKEN_RESPONSE',
-                token: null,
-                error: 'Authentication required',
-                timestamp: Date.now()
-            }, iframeOrigin);
-            console.log('⚠ No JWT token available');
-        }
-    };
-
-    // Handler for other message types
-    window.handleOtherMessages = function(event) {
-        const eventData = event.data;
-
-        switch(eventData.type) {
-            case 'CREDIT_SYSTEM_READY':
-                console.log('✓ Credit system ready!', eventData);
-                break;
-
-            case 'BALANCE_UPDATE':
-                console.log(`💰 Balance: ${eventData.balance} credits`);
-                break;
-
-            case 'CREDITS_SPENT':
-                console.log(`💳 Spent: ${eventData.amount} credits`, eventData);
-                break;
-
-            case 'CREDITS_ADDED':
-                console.log(`➕ Added: ${eventData.amount} credits`, eventData);
-                break;
-
-            case 'LOGOUT':
-                console.log('👋 User logged out', eventData);
-                parentJWT = null;
-                parentRefreshToken = null;
-                parentUser = null;
-                break;
-
-            case 'ERROR':
-                console.error('❌ Error from iframe', eventData);
-                break;
-        }
-    };
-
-    // Mark DOM as ready
-    window.parentDOMReady = true;
-    console.log('✅ DOM ready flag set, handlers defined');
-
-    // Process all pending messages
-    if (window.pendingMessages && window.pendingMessages.length > 0) {
-        console.log(`🔁 Processing ${window.pendingMessages.length} pending message(s)...`);
-
-        for (const event of window.pendingMessages) {
-            console.log('📨 Processing pending message:', event.data.type);
-            await window.handleMessage(event);
-        }
-
-        window.pendingMessages = [];
-        console.log('✅ All pending messages processed');
-    }
-
-    // On iframe load, just clear cached tokens
-    iframe.addEventListener('load', async function() {
-        console.log('📄 Iframe loaded - waiting for REQUEST_JWT_TOKEN message');
-
-        // Clear cached tokens to ensure fresh generation on request
-        parentJWT = null;
-        parentRefreshToken = null;
-        parentUser = null;
+  try {
+    // Call session-based JWT generation endpoint
+    const response = await fetch('/iframe/jwt-from-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin'
     });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      parentJWT = data.data.tokens.access_token;
+      parentRefreshToken = data.data.tokens.refresh_token;
+      parentUser = data.data.user;
+
+      return true;
+    }
+  } catch (error) {
+    console.error('Failed to generate JWT token:', error);
+  }
+
+  return false;
+}
+
+// Listen for JWT token requests from iframe
+window.addEventListener('message', async function(event) {
+  if (event.data?.type === 'REQUEST_JWT_TOKEN') {
+    console.log('Iframe requesting JWT token');
+
+    // Get fresh JWT token
+    const success = await getJWTTokenForIframe();
+
+    if (success) {
+      // Send token to iframe
+      iframe.contentWindow.postMessage({
+        type: 'JWT_TOKEN_RESPONSE',
+        token: parentJWT,
+        refreshToken: parentRefreshToken,
+        user: parentUser,
+        timestamp: Date.now()
+      }, iframeOrigin);
+    } else {
+      // Send error response
+      iframe.contentWindow.postMessage({
+        type: 'JWT_TOKEN_RESPONSE',
+        token: null,
+        error: 'Authentication required'
+      }, iframeOrigin);
+    }
+  }
+});
+
+// On iframe load, send JWT token
+iframe.addEventListener('load', async function() {
+  // Wait for iframe to initialize
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  const success = await getJWTTokenForIframe();
+
+  if (success) {
+    iframe.contentWindow.postMessage({
+      type: 'JWT_TOKEN_RESPONSE',
+      token: parentJWT,
+      refreshToken: parentRefreshToken,
+      user: parentUser
+    }, iframeOrigin);
+  }
 });
 ```
 
-**Key Features:**
+---
 
-1. **Early Message Listener**: Set up before iframe loads to catch REQUEST_JWT_TOKEN messages
-2. **Origin Validation**: Verifies messages come from allowed origins (CORS_ALLOWED_ORIGINS)
-3. **Pending Message Queue**: Stores messages that arrive before DOM is ready
-4. **Fresh Token Generation**: Always generates fresh JWT tokens on request (no caching)
-5. **Bidirectional Communication**: Handles messages from iframe and sends responses
-6. **Security**: CSRF token, origin validation, same-origin credentials
+# 🔷 Personas System Implementation
+
+### 10. Personas & User Details Integration
+
+The Supreme AI SDK provides **PersonasClient** for persona management, separate from the CreditSystemClient. Both clients share the same JWT authentication infrastructure.
+
+#### Architecture Overview
+
+```
+SDK Package: @supreme-ai/si-sdk
+├── CreditSystemClient
+│   └── Methods: login(), checkBalance(), spendCredits(), addCredits()
+│   └── Endpoint: /api/secure-credits/jwt/*
+│
+└── PersonasClient
+    ├── Methods: getPersonas(), getPersonaById(id)
+    └── Endpoint: /api/personas/jwt/*
+```
+
+#### Key Design Principles
+
+1. **Separate Clients**:
+   - `CreditSystemClient` - For credit operations
+   - `PersonasClient` - For persona operations
+   - Both use same JWT token format
+
+2. **Shared Authentication**:
+   - Both clients use `creditSystem_accessToken` from sessionStorage
+   - No cross-pollution of API calls
+   - Same token refresh mechanism
+
+3. **Dual Mode Support**:
+   - Standalone: Direct JWT login
+   - Embedded: Parent postMessage authentication
 
 ---
+
+#### SDK Installation & Setup
+
+**Install the SDK:**
+
+```bash
+npm install @supreme-ai/si-sdk
+```
+
+**Environment Variables:**
+
+```env
+# API Base URLs
+VITE_AUTH_URL=https://v2.supremegroup.ai/api/jwt
+VITE_PERSONAS_API_URL=https://v2.supremegroup.ai/api
+
+# For embedded mode - allowed parent domains
+VITE_ALLOWED_PARENTS=https://v2.supremegroup.ai
+```
+
+---
+
+#### PersonasClient SDK Usage
+
+##### 1. Import the SDK
+
+```typescript
+// Dynamic import (recommended)
+const SDK = await import("@supreme-ai/si-sdk");
+const PersonasClient = SDK.PersonasClient || SDK.default?.PersonasClient;
+
+// Or direct import
+import { PersonasClient } from "@supreme-ai/si-sdk";
+```
+
+##### 2. Initialize PersonasClient
+
+```typescript
+const personasClient = new PersonasClient({
+  apiBaseUrl: "https://v2.supremegroup.ai/api",
+  getAuthToken: () => {
+    // Return JWT token from sessionStorage
+    return sessionStorage.getItem('creditSystem_accessToken');
+  },
+  debug: false  // Set to true to enable SDK console logs
+});
+```
+
+**Configuration Options:**
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `apiBaseUrl` | `string` | Yes | Base URL for personas API (e.g., `https://v2.supremegroup.ai/api`) |
+| `getAuthToken` | `() => string \| null` | Yes | Function returning JWT access token from sessionStorage |
+| `debug` | `boolean` | No | Enable SDK console logs (default: `false`) |
+
+##### 3. Fetch All Personas
+
+```typescript
+// Call getPersonas() method
+const result = await personasClient.getPersonas();
+
+// Response structure
+if (result.success) {
+  const personas = result.personas;  // Array of persona objects
+  console.log(`Fetched ${personas.length} personas`);
+
+  // Example persona object:
+  // {
+  //   id: 1,
+  //   name: "Marketing Manager",
+  //   short_description: "B2B SaaS Marketing Professional",
+  //   long_description: "...",
+  //   category: "Professional",
+  //   geo: "North America",
+  //   size: "Mid-Market",
+  //   industry: "Technology",
+  //   job_title: "Marketing Manager",
+  //   value: "...",
+  //   created_at: "2024-01-15T10:30:00.000000Z",
+  //   updated_at: "2024-01-15T10:30:00.000000Z"
+  // }
+} else {
+  console.error('Failed to fetch personas:', result.message);
+}
+```
+
+**API Endpoint Called:**
+- `GET /api/personas/jwt/list`
+- Requires: JWT Bearer token in Authorization header
+- Returns: Array of persona objects
+
+**SDK Console Output (when debug: true):**
+```
+[PersonasClient] 🎭 Fetching all personas...
+[PersonasClient] 📡 Making request to: https://v2.supremegroup.ai/api/personas/jwt/list
+[PersonasClient] ✅ Fetched 2 personas
+```
+
+---
+
+##### 4. SDK Debug Mode Control
+
+Control PersonasClient console logs with the `debug` flag:
+
+```typescript
+// Disable debug logs (default, recommended for production)
+const personasClient = new PersonasClient({
+  apiBaseUrl: "https://v2.supremegroup.ai/api",
+  getAuthToken: () => sessionStorage.getItem('creditSystem_accessToken'),
+  debug: false  // No SDK console logs
+});
+
+// Enable debug logs (useful for development)
+const personasClient = new PersonasClient({
+  apiBaseUrl: "https://v2.supremegroup.ai/api",
+  getAuthToken: () => sessionStorage.getItem('creditSystem_accessToken'),
+  debug: true  // Shows SDK logs: [PersonasClient] 🎭...
+});
+```
+
+**Recommended Pattern:**
+
+```typescript
+const DEBUG = false;  // Set to true for debugging
+
+const personasClient = new PersonasClient({
+  apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL || "https://v2.supremegroup.ai/api",
+  getAuthToken: () => sessionStorage.getItem('creditSystem_accessToken'),
+  debug: DEBUG
+});
+```
+
+---
+
+#### SessionStorage Keys
+
+Both PersonasClient and CreditSystemClient use the same sessionStorage keys for JWT tokens:
+
+| Key | Description | Example Value |
+|-----|-------------|---------------|
+| `creditSystem_accessToken` | JWT access token | `eyJ0eXAiOiJKV1QiLCJhbGc...` |
+| `creditSystem_refreshToken` | JWT refresh token | `eyJ0eXAiOiJKV1QiLCJhbGc...` |
+| `creditSystem_user` | User object (JSON string) | `{"id":1,"name":"John","email":"john@example.com"}` |
+
+**How SDK Retrieves Tokens:**
+
+```typescript
+// PersonasClient automatically calls this function before each API request
+const personasClient = new PersonasClient({
+  apiBaseUrl: "https://v2.supremegroup.ai/api",
+  getAuthToken: () => {
+    // This function is called by the SDK internally
+    return sessionStorage.getItem('creditSystem_accessToken');
+  },
+  debug: false
+});
+
+// SDK automatically adds Authorization header:
+// Authorization: Bearer {token from getAuthToken()}
+```
+
+---
+
+#### SDK Methods Comparison
+
+| Client | Method | API Endpoint | Purpose |
+|--------|--------|--------------|---------|
+| **PersonasClient** | `getPersonas()` | `GET /api/personas/jwt/list` | Fetch all personas for authenticated user |
+| **PersonasClient** | `getPersonaById(id)` | `GET /api/personas/jwt/{id}` | Fetch specific persona by ID |
+| **CreditSystemClient** | `login(email, password)` | `POST /api/jwt/login` | Authenticate user and get JWT tokens |
+| **CreditSystemClient** | `checkBalance()` | `GET /api/secure-credits/jwt/balance` | Get user's credit balance |
+| **CreditSystemClient** | `spendCredits(amount, reason)` | `POST /api/secure-credits/jwt/spend` | Deduct credits from balance |
+| **CreditSystemClient** | `addCredits(amount, reason)` | `POST /api/secure-credits/jwt/add` | Add credits to balance |
+
+---
+
+#### Error Handling
+
+```typescript
+try {
+  const result = await personasClient.getPersonas();
+
+  if (result.success) {
+    // Success - use result.personas
+    console.log('Fetched personas:', result.personas);
+  } else {
+    // API returned error
+    console.error('API Error:', result.message);
+  }
+} catch (error) {
+  // Network error or SDK error
+  console.error('SDK Error:', error.message);
+}
+```
+
+**Common Error Scenarios:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `401 Unauthorized` | Invalid or expired JWT token | Re-authenticate user or refresh token |
+| `403 Forbidden` | User doesn't have permission | Check user role/permissions |
+| `404 Not Found` | Persona ID doesn't exist | Validate persona ID before calling |
+| `Network Error` | API server unreachable | Check API URL and network connection |
+
+---
+
+#### Complete Usage Example
+
+```typescript
+// 1. Import SDK
+const SDK = await import("@supreme-ai/si-sdk");
+const PersonasClient = SDK.PersonasClient || SDK.default?.PersonasClient;
+
+// 2. Initialize client
+const personasClient = new PersonasClient({
+  apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL,
+  getAuthToken: () => sessionStorage.getItem('creditSystem_accessToken'),
+  debug: false
+});
+
+// 3. Fetch all personas
+try {
+  const result = await personasClient.getPersonas();
+
+  if (result.success) {
+    console.log(`Loaded ${result.personas.length} personas`);
+
+    // Display personas
+    result.personas.forEach(persona => {
+      console.log(`- ${persona.name} (${persona.category})`);
+    });
+
+    // 4. Fetch specific persona details
+    if (result.personas.length > 0) {
+      const firstPersona = result.personas[0];
+      const detailsResult = await personasClient.getPersonaById(firstPersona.id);
+
+      if (detailsResult.success) {
+        console.log('Persona details:', detailsResult.persona);
+      }
+    }
+  } else {
+    console.error('Failed to fetch personas:', result.message);
+  }
+} catch (error) {
+  console.error('Error:', error.message);
+}
+```
+
+---
+
+#### Authentication Flow (Embedded Mode)
+
+When operating in embedded mode (iframe), the Lovable app receives JWT tokens from the parent via postMessage:
+
+**1. Request JWT Token:**
+
+```typescript
+// Child iframe detects embedded mode
+const isInIframe = window.self !== window.top;
+
+if (isInIframe) {
+  // Request JWT from parent
+  window.parent.postMessage({
+    type: 'REQUEST_JWT_TOKEN'
+  }, '*');
+}
+```
+
+**2. Parent Responds with JWT:**
+
+```typescript
+// Parent page listener (in user-details.blade.php)
+window.addEventListener('message', async function(event) {
+  // Validate origin
+  if (!allowedOrigins.includes(event.origin)) {
+    console.warn('Rejected message from unauthorized origin');
+    return;
+  }
+
+  // Handle JWT token request from iframe
+  if (event.data.type === 'REQUEST_JWT_TOKEN') {
+    // Get fresh JWT token from Laravel session
+    const success = await getJWTTokenForIframe();
+
+    if (success) {
+      // Send JWT token to iframe
+      iframe.contentWindow.postMessage({
+        type: 'JWT_TOKEN_RESPONSE',
+        token: parentJWT,
+        refreshToken: parentRefreshToken,
+        user: parentUser,
+        timestamp: Date.now()
+      }, iframeOrigin);
+    } else {
+      // Send error response
+      iframe.contentWindow.postMessage({
+        type: 'JWT_TOKEN_RESPONSE',
+        token: null,
+        error: 'Authentication required'
+      }, iframeOrigin);
+    }
+  }
+});
+```
+
+**3. Child Stores JWT and Initializes SDK:**
+
+```typescript
+// Child iframe listens for JWT response
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'JWT_TOKEN_RESPONSE') {
+    if (event.data.token && event.data.user) {
+      const { token, refreshToken, user } = event.data;
+
+      // Store tokens in sessionStorage
+      sessionStorage.setItem('creditSystem_accessToken', token);
+      sessionStorage.setItem('creditSystem_refreshToken', refreshToken);
+      sessionStorage.setItem('creditSystem_user', JSON.stringify(user));
+
+      // Now initialize PersonasClient with stored token
+      const personasClient = new PersonasClient({
+        apiBaseUrl: "https://v2.supremegroup.ai/api",
+        getAuthToken: () => sessionStorage.getItem('creditSystem_accessToken'),
+        debug: false
+      });
+
+      // Start fetching personas
+      fetchPersonas();
+    } else {
+      console.error('No token received:', event.data.error);
+    }
+  }
+});
+```
+
+---
+
+# 🔷 Reference & Security
 
 ## API Endpoints
 
@@ -1646,6 +1948,35 @@ Content-Type: application/json
   "email": "user@example.com",
   "password": "password123"
 }
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "user": {
+            "id": 123,
+            "email": "user@example.com",
+            "name": "John Doe"
+        },
+        "tokens": {
+            "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+            "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+            "token_type": "Bearer",
+            "expires_in": 900
+        }
+    }
+}
+```
+
+#### 2. Generate JWT from Session (Embedded Mode)
+
+```http
+POST /iframe/jwt-from-session
+Cookie: laravel_session=...
+X-CSRF-TOKEN: ...
 ```
 
 **Response:**
@@ -2037,7 +2368,7 @@ VITE_DEV_MODE=false
 ### 5. SDK Security Configuration
 
 ```typescript
-import { CreditSystemClient } from "@supreme-ai/si-sdk";
+import { CreditSystemClient } from "@supreme-ai/credit-sdk";
 
 const client = new CreditSystemClient({
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
@@ -2319,20 +2650,19 @@ if (token) {
 
 ## Conclusion
 
-The Supreme AI SDK (`@supreme-ai/si-sdk`) provides a robust, secure JWT-based authentication mechanism with comprehensive credit management and personas functionality. The dual-mode architecture allows for maximum flexibility while maintaining security and user experience.
+The Supreme AI Credit System provides a robust, secure JWT-based authentication mechanism that seamlessly works in both standalone and embedded modes. The dual-mode architecture allows for maximum flexibility while maintaining security and user experience.
 
 **Key Takeaways:**
 
--   **Credit System**: Complete credit management with balance tracking and transactions
--   **Personas Management**: Fetch and manage AI personas
 -   **Standalone Mode**: Direct username/password authentication
 -   **Embedded Mode**: Leverages parent Laravel session for seamless SSO
 -   **JWT Tokens**: Short-lived, secure, and automatically refreshed
 -   **PostMessage API**: Secure cross-origin communication for iframes
+-   **Balance Display**: Formatted with thousand separators (8,270)
 -   **Transaction History**: Complete audit trail of all credit operations
 
 For additional support or questions, refer to the SDK documentation at:
 
 -   **SDK Repository**: `https://github.com/developersupreme/supreme-ai-sdk`
--   **NPM Package**: `@supreme-ai/si-sdk`
--   **Installation**: `npm install github:developersupreme/supreme-ai-sdk`
+-   **NPM Package**: `@supreme-ai/credit-sdk`
+-   **Installation**: `npm install git+https://<personal_access_token>@github.com/developersupreme/supreme-ai-sdk.git`
