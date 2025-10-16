@@ -256,6 +256,10 @@ var AuthManager = class {
    * Refresh JWT token
    */
   async refreshToken(refreshToken) {
+    if (this.debug) {
+      console.log("[AuthManager] \u{1F4E4} Sending token refresh request to server");
+      console.log("[AuthManager] \u{1F510} Using refresh token (length):", refreshToken?.length || 0);
+    }
     try {
       const response = await fetch(`${this.authUrl}/refresh`, {
         method: "POST",
@@ -266,20 +270,40 @@ var AuthManager = class {
         body: JSON.stringify({ refresh_token: refreshToken })
       });
       const data = await response.json();
+      if (this.debug) {
+        console.log("[AuthManager] \u{1F4E5} Server response status:", response.status);
+        console.log("[AuthManager] \u{1F4E6} Server response:", {
+          success: data.success,
+          hasTokensObject: !!data.data?.tokens,
+          hasAccessToken: !!data.data?.access_token,
+          hasRefreshToken: !!(data.data?.tokens?.refresh_token || data.data?.access_token)
+        });
+      }
       if (response.ok && data.success && data.data) {
-        if (this.debug) {
-          console.log("Token refreshed successfully");
-        }
+        const hasNewRefreshToken = !!data.data.tokens?.refresh_token;
         const tokens = data.data.tokens || {
           access_token: data.data.access_token,
           refresh_token: void 0
           // Will be preserved by CreditSystemClient
         };
+        if (this.debug) {
+          console.log("[AuthManager] \u2705 Token refresh successful");
+          console.log("[AuthManager] \u{1F39F}\uFE0F Received new access_token:", tokens.access_token?.substring(0, 20) + "...");
+          if (hasNewRefreshToken) {
+            console.log("[AuthManager] \u{1F504} Received NEW refresh_token:", tokens.refresh_token?.substring(0, 20) + "...");
+          } else {
+            console.log("[AuthManager] \u26A0\uFE0F Server did NOT return new refresh_token");
+            console.log("[AuthManager] \u{1F4A1} CreditSystemClient will preserve existing refresh_token");
+          }
+        }
         return {
           success: true,
           tokens
         };
       } else {
+        if (this.debug) {
+          console.error("[AuthManager] \u274C Token refresh failed:", data.message);
+        }
         return {
           success: false,
           message: data.message || "Token refresh failed"
@@ -287,7 +311,7 @@ var AuthManager = class {
       }
     } catch (error) {
       if (this.debug) {
-        console.error("Token refresh error:", error);
+        console.error("[AuthManager] \u274C Token refresh network error:", error.message);
       }
       return {
         success: false,
@@ -1163,26 +1187,48 @@ var CreditSystemClient = class extends EventEmitter {
    */
   async refreshToken() {
     const auth = this.storage.get("auth");
+    this.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+    this.log("\u{1F504} TOKEN REFRESH CYCLE STARTED");
+    this.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
     if (!auth?.refreshToken) {
-      this.log("\u26A0\uFE0F Token refresh blocked: No refresh token available");
+      this.log("\u274C CRITICAL: No refresh token found in storage!");
+      this.log("   Cannot proceed with token refresh");
       return false;
     }
-    this.log("\u{1F504} Refreshing JWT token...");
-    this.log(`\u{1F510} Refresh token length: ${auth.refreshToken?.length || 0} characters`);
+    this.log("\u2705 Refresh token found in storage");
+    this.log(`   Length: ${auth.refreshToken?.length || 0} characters`);
+    this.log(`   Preview: ${auth.refreshToken?.substring(0, 30)}...`);
     try {
+      this.log("\u{1F4E4} Initiating token refresh request...");
       const result = await this.authManager.refreshToken(auth.refreshToken);
       if (result.success && result.tokens) {
-        this.log("\u2705 Token refreshed successfully!");
-        this.log(`\u{1F510} New token length: ${result.tokens.access_token?.length || 0} characters`);
+        this.log("");
+        this.log("\u2705 TOKEN REFRESH SUCCESSFUL!");
+        this.log("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+        const hasNewRefreshToken = !!result.tokens.refresh_token;
+        const oldRefreshToken = auth.refreshToken;
+        const newRefreshToken = result.tokens.refresh_token || oldRefreshToken;
+        this.log("\u{1F4CA} Token Status:");
+        this.log(`   \u2713 New Access Token:  ${result.tokens.access_token?.substring(0, 30)}...`);
+        this.log(`   \u2713 Access Token Length: ${result.tokens.access_token?.length || 0} chars`);
+        if (hasNewRefreshToken) {
+          this.log(`   \u2713 New Refresh Token: ${result.tokens.refresh_token?.substring(0, 30)}...`);
+          this.log("   \u2139\uFE0F Server returned NEW refresh token - will use this for next cycle");
+        } else {
+          this.log("   \u26A0\uFE0F Server did NOT return new refresh token");
+          this.log(`   \u2713 Preserving OLD refresh token: ${oldRefreshToken?.substring(0, 30)}...`);
+          this.log("   \u2139\uFE0F Will reuse same refresh token for next cycle");
+        }
         this.storage.set("auth", {
           ...auth,
           token: result.tokens.access_token,
-          refreshToken: result.tokens.refresh_token || auth.refreshToken
+          refreshToken: newRefreshToken
         });
-        this.log("\u{1F4BE} New tokens saved to storage");
-        if (!result.tokens.refresh_token) {
-          this.log("\u2139\uFE0F Server did not return new refresh token, keeping existing one");
-        }
+        this.log("");
+        this.log("\u{1F4BE} Storage Updated Successfully:");
+        this.log(`   \u2022 Access Token:  UPDATED \u2713`);
+        this.log(`   \u2022 Refresh Token: ${hasNewRefreshToken ? "UPDATED \u2713" : "PRESERVED \u2713"}`);
+        this.log(`   \u2022 User Data:     PRESERVED \u2713`);
         this.emit("tokenRefreshed");
         if (this.state.mode === "embedded") {
           this.log("\u{1F4E4} Sending JWT_TOKEN_REFRESHED to parent");
@@ -1191,12 +1237,19 @@ var CreditSystemClient = class extends EventEmitter {
             timestamp: Date.now()
           });
         }
+        this.log("");
+        this.log("\u2728 TOKEN REFRESH CYCLE COMPLETED SUCCESSFULLY");
+        this.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
         return true;
       } else {
-        this.log("\u274C Token refresh failed: Invalid response");
+        this.log("");
+        this.log("\u274C TOKEN REFRESH FAILED: Invalid response from server");
+        this.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
       }
     } catch (error) {
-      this.log("\u274C Token refresh error:", error);
+      this.log("");
+      this.log("\u274C TOKEN REFRESH ERROR:", error);
+      this.log("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
     }
     this.log("\u26A0\uFE0F Token expired - authentication required");
     this.emit("tokenExpired");

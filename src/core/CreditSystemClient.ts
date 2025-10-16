@@ -661,32 +661,59 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   private async refreshToken(): Promise<boolean> {
     const auth = this.storage.get('auth');
+
+    this.log('═══════════════════════════════════════════════════');
+    this.log('🔄 TOKEN REFRESH CYCLE STARTED');
+    this.log('═══════════════════════════════════════════════════');
+
     if (!auth?.refreshToken) {
-      this.log('⚠️ Token refresh blocked: No refresh token available');
+      this.log('❌ CRITICAL: No refresh token found in storage!');
+      this.log('   Cannot proceed with token refresh');
       return false;
     }
 
-    this.log('🔄 Refreshing JWT token...');
-    this.log(`🔐 Refresh token length: ${auth.refreshToken?.length || 0} characters`);
+    this.log('✅ Refresh token found in storage');
+    this.log(`   Length: ${auth.refreshToken?.length || 0} characters`);
+    this.log(`   Preview: ${auth.refreshToken?.substring(0, 30)}...`);
 
     try {
+      this.log('📤 Initiating token refresh request...');
       const result = await this.authManager.refreshToken(auth.refreshToken);
 
       if (result.success && result.tokens) {
-        this.log('✅ Token refreshed successfully!');
-        this.log(`🔐 New token length: ${result.tokens.access_token?.length || 0} characters`);
+        this.log('');
+        this.log('✅ TOKEN REFRESH SUCCESSFUL!');
+        this.log('───────────────────────────────────────────────────');
+
+        const hasNewRefreshToken = !!result.tokens.refresh_token;
+        const oldRefreshToken = auth.refreshToken;
+        const newRefreshToken = result.tokens.refresh_token || oldRefreshToken;
+
+        this.log('📊 Token Status:');
+        this.log(`   ✓ New Access Token:  ${result.tokens.access_token?.substring(0, 30)}...`);
+        this.log(`   ✓ Access Token Length: ${result.tokens.access_token?.length || 0} chars`);
+
+        if (hasNewRefreshToken) {
+          this.log(`   ✓ New Refresh Token: ${result.tokens.refresh_token?.substring(0, 30)}...`);
+          this.log('   ℹ️ Server returned NEW refresh token - will use this for next cycle');
+        } else {
+          this.log('   ⚠️ Server did NOT return new refresh token');
+          this.log(`   ✓ Preserving OLD refresh token: ${oldRefreshToken?.substring(0, 30)}...`);
+          this.log('   ℹ️ Will reuse same refresh token for next cycle');
+        }
 
         // Update storage - preserve old refresh token if new one not provided
-        // This handles servers that only return access_token on refresh
         this.storage.set('auth', {
           ...auth,
           token: result.tokens.access_token,
-          refreshToken: result.tokens.refresh_token || auth.refreshToken
+          refreshToken: newRefreshToken
         });
-        this.log('💾 New tokens saved to storage');
-        if (!result.tokens.refresh_token) {
-          this.log('ℹ️ Server did not return new refresh token, keeping existing one');
-        }
+
+        this.log('');
+        this.log('💾 Storage Updated Successfully:');
+        this.log(`   • Access Token:  UPDATED ✓`);
+        this.log(`   • Refresh Token: ${hasNewRefreshToken ? 'UPDATED ✓' : 'PRESERVED ✓'}`);
+        this.log(`   • User Data:     PRESERVED ✓`);
 
         this.emit('tokenRefreshed');
 
@@ -699,12 +726,20 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
           });
         }
 
+        this.log('');
+        this.log('✨ TOKEN REFRESH CYCLE COMPLETED SUCCESSFULLY');
+        this.log('═══════════════════════════════════════════════════');
+
         return true;
       } else {
-        this.log('❌ Token refresh failed: Invalid response');
+        this.log('');
+        this.log('❌ TOKEN REFRESH FAILED: Invalid response from server');
+        this.log('═══════════════════════════════════════════════════');
       }
     } catch (error) {
-      this.log('❌ Token refresh error:', error);
+      this.log('');
+      this.log('❌ TOKEN REFRESH ERROR:', error);
+      this.log('═══════════════════════════════════════════════════');
     }
 
     this.log('⚠️ Token expired - authentication required');

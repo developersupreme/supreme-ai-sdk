@@ -113,6 +113,11 @@ export class AuthManager {
     tokens?: AuthTokens;
     message?: string;
   }> {
+    if (this.debug) {
+      console.log('[AuthManager] 📤 Sending token refresh request to server');
+      console.log('[AuthManager] 🔐 Using refresh token (length):', refreshToken?.length || 0);
+    }
+
     try {
       const response = await fetch(`${this.authUrl}/refresh`, {
         method: 'POST',
@@ -125,24 +130,45 @@ export class AuthManager {
 
       const data: RefreshResponse = await response.json();
 
-      if (response.ok && data.success && data.data) {
-        if (this.debug) {
-          console.log('Token refreshed successfully');
-        }
+      if (this.debug) {
+        console.log('[AuthManager] 📥 Server response status:', response.status);
+        console.log('[AuthManager] 📦 Server response:', {
+          success: data.success,
+          hasTokensObject: !!data.data?.tokens,
+          hasAccessToken: !!data.data?.access_token,
+          hasRefreshToken: !!(data.data?.tokens?.refresh_token || data.data?.access_token)
+        });
+      }
 
+      if (response.ok && data.success && data.data) {
         // Handle both response formats:
         // Format 1: { data: { tokens: { access_token, refresh_token } } }
         // Format 2: { data: { access_token, expires_in } } (server only returns access_token)
+        const hasNewRefreshToken = !!(data.data.tokens?.refresh_token);
         const tokens: AuthTokens = data.data.tokens || {
           access_token: data.data.access_token!,
           refresh_token: undefined as any // Will be preserved by CreditSystemClient
         };
+
+        if (this.debug) {
+          console.log('[AuthManager] ✅ Token refresh successful');
+          console.log('[AuthManager] 🎟️ Received new access_token:', tokens.access_token?.substring(0, 20) + '...');
+          if (hasNewRefreshToken) {
+            console.log('[AuthManager] 🔄 Received NEW refresh_token:', tokens.refresh_token?.substring(0, 20) + '...');
+          } else {
+            console.log('[AuthManager] ⚠️ Server did NOT return new refresh_token');
+            console.log('[AuthManager] 💡 CreditSystemClient will preserve existing refresh_token');
+          }
+        }
 
         return {
           success: true,
           tokens: tokens
         };
       } else {
+        if (this.debug) {
+          console.error('[AuthManager] ❌ Token refresh failed:', data.message);
+        }
         return {
           success: false,
           message: data.message || 'Token refresh failed'
@@ -150,7 +176,7 @@ export class AuthManager {
       }
     } catch (error: any) {
       if (this.debug) {
-        console.error('Token refresh error:', error);
+        console.error('[AuthManager] ❌ Token refresh network error:', error.message);
       }
 
       return {
