@@ -105,7 +105,16 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
       }
     });
 
+    client.on('tokenRefreshed', () => {
+      // Token was refreshed successfully - user stays authenticated
+      // Don't change isAuthenticated state, just log it
+      if (config?.debug) {
+        console.log('[useCreditSystem] Token refreshed - user remains authenticated');
+      }
+    });
+
     client.on('tokenExpired', () => {
+      // Only set to false when token actually expires (refresh failed)
       setIsAuthenticated(false);
       setError('Session expired. Please login again.');
     });

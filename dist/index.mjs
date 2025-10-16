@@ -1413,6 +1413,11 @@ function useCreditSystem(config) {
         setError(`${data.type}: ${data.error}`);
       }
     });
+    client.on("tokenRefreshed", () => {
+      if (config?.debug) {
+        console.log("[useCreditSystem] Token refreshed - user remains authenticated");
+      }
+    });
     client.on("tokenExpired", () => {
       setIsAuthenticated(false);
       setError("Session expired. Please login again.");
