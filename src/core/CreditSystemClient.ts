@@ -676,13 +676,17 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         this.log('✅ Token refreshed successfully!');
         this.log(`🔐 New token length: ${result.tokens.access_token?.length || 0} characters`);
 
-        // Update storage
+        // Update storage - preserve old refresh token if new one not provided
+        // This handles servers that only return access_token on refresh
         this.storage.set('auth', {
           ...auth,
           token: result.tokens.access_token,
-          refreshToken: result.tokens.refresh_token
+          refreshToken: result.tokens.refresh_token || auth.refreshToken
         });
         this.log('💾 New tokens saved to storage');
+        if (!result.tokens.refresh_token) {
+          this.log('ℹ️ Server did not return new refresh token, keeping existing one');
+        }
 
         this.emit('tokenRefreshed');
 

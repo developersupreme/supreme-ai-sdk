@@ -270,9 +270,14 @@ var AuthManager = class {
         if (this.debug) {
           console.log("Token refreshed successfully");
         }
+        const tokens = data.data.tokens || {
+          access_token: data.data.access_token,
+          refresh_token: void 0
+          // Will be preserved by CreditSystemClient
+        };
         return {
           success: true,
-          tokens: data.data.tokens
+          tokens
         };
       } else {
         return {
@@ -1172,9 +1177,12 @@ var CreditSystemClient = class extends EventEmitter {
         this.storage.set("auth", {
           ...auth,
           token: result.tokens.access_token,
-          refreshToken: result.tokens.refresh_token
+          refreshToken: result.tokens.refresh_token || auth.refreshToken
         });
         this.log("\u{1F4BE} New tokens saved to storage");
+        if (!result.tokens.refresh_token) {
+          this.log("\u2139\uFE0F Server did not return new refresh token, keeping existing one");
+        }
         this.emit("tokenRefreshed");
         if (this.state.mode === "embedded") {
           this.log("\u{1F4E4} Sending JWT_TOKEN_REFRESHED to parent");

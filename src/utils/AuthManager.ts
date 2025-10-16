@@ -16,7 +16,9 @@ interface LoginResponse {
 interface RefreshResponse {
   success: boolean;
   data?: {
-    tokens: AuthTokens;
+    tokens?: AuthTokens;
+    access_token?: string;
+    expires_in?: number;
   };
   message?: string;
 }
@@ -128,9 +130,17 @@ export class AuthManager {
           console.log('Token refreshed successfully');
         }
 
+        // Handle both response formats:
+        // Format 1: { data: { tokens: { access_token, refresh_token } } }
+        // Format 2: { data: { access_token, expires_in } } (server only returns access_token)
+        const tokens: AuthTokens = data.data.tokens || {
+          access_token: data.data.access_token!,
+          refresh_token: undefined as any // Will be preserved by CreditSystemClient
+        };
+
         return {
           success: true,
-          tokens: data.data.tokens
+          tokens: tokens
         };
       } else {
         return {
