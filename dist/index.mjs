@@ -272,8 +272,10 @@ var AuthManager = class {
       const data = await response.json();
       if (this.debug) {
         console.log("[AuthManager] \u{1F4E5} Server response status:", response.status);
-        console.log("[AuthManager] \u{1F4E6} Server response:", {
+        console.log("[AuthManager] \u{1F4E6} RAW Server response:", JSON.stringify(data, null, 2));
+        console.log("[AuthManager] \u{1F4E6} Parsed response:", {
           success: data.success,
+          hasData: !!data.data,
           hasTokensObject: !!data.data?.tokens,
           hasAccessToken: !!data.data?.access_token,
           hasRefreshToken: !!(data.data?.tokens?.refresh_token || data.data?.access_token)
@@ -964,6 +966,33 @@ var CreditSystemClient = class extends EventEmitter {
     this.log("\u{1F4B0} Fetching current balance...");
     try {
       const result = await this.apiClient.get("/balance");
+      if (!result.success && result.error === "Authentication failed") {
+        this.log("\u26A0\uFE0F Balance fetch got 401 - attempting token refresh...");
+        const refreshed = await this.refreshToken();
+        if (refreshed) {
+          this.log("\u2705 Token refreshed, retrying balance fetch...");
+          const retryResult = await this.apiClient.get("/balance");
+          if (retryResult.success && retryResult.data) {
+            const previousBalance = this.state.balance;
+            this.state.balance = retryResult.data.balance;
+            this.log(`\u2705 Balance fetched after retry: ${this.state.balance} credits`);
+            if (previousBalance !== this.state.balance) {
+              this.log(`\u{1F4CA} Balance changed: ${previousBalance} \u2192 ${this.state.balance}`);
+            }
+            this.emit("balanceUpdate", { balance: this.state.balance });
+            if (this.state.mode === "embedded") {
+              this.messageBridge.sendToParent("BALANCE_UPDATE", {
+                balance: this.state.balance,
+                timestamp: Date.now()
+              });
+            }
+            return { success: true, balance: this.state.balance };
+          }
+        }
+        const error = result.message || "Failed to get balance";
+        this.log(`\u274C Balance fetch failed after refresh attempt: ${error}`);
+        return { success: false, error };
+      }
       if (result.success && result.data) {
         const previousBalance = this.state.balance;
         this.state.balance = result.data.balance;

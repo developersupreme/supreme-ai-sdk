@@ -132,8 +132,10 @@ export class AuthManager {
 
       if (this.debug) {
         console.log('[AuthManager] 📥 Server response status:', response.status);
-        console.log('[AuthManager] 📦 Server response:', {
+        console.log('[AuthManager] 📦 RAW Server response:', JSON.stringify(data, null, 2));
+        console.log('[AuthManager] 📦 Parsed response:', {
           success: data.success,
+          hasData: !!data.data,
           hasTokensObject: !!data.data?.tokens,
           hasAccessToken: !!data.data?.access_token,
           hasRefreshToken: !!(data.data?.tokens?.refresh_token || data.data?.access_token)

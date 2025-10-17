@@ -397,6 +397,43 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     try {
       const result = await this.apiClient.get<{ balance: number }>('/balance');
 
+      // If 401 error, try refreshing token and retry once
+      if (!result.success && result.error === 'Authentication failed') {
+        this.log('⚠️ Balance fetch got 401 - attempting token refresh...');
+        const refreshed = await this.refreshToken();
+
+        if (refreshed) {
+          this.log('✅ Token refreshed, retrying balance fetch...');
+          const retryResult = await this.apiClient.get<{ balance: number }>('/balance');
+
+          if (retryResult.success && retryResult.data) {
+            const previousBalance = this.state.balance;
+            this.state.balance = retryResult.data.balance;
+
+            this.log(`✅ Balance fetched after retry: ${this.state.balance} credits`);
+            if (previousBalance !== this.state.balance) {
+              this.log(`📊 Balance changed: ${previousBalance} → ${this.state.balance}`);
+            }
+
+            this.emit('balanceUpdate', { balance: this.state.balance });
+
+            if (this.state.mode === 'embedded') {
+              this.messageBridge.sendToParent('BALANCE_UPDATE', {
+                balance: this.state.balance,
+                timestamp: Date.now()
+              });
+            }
+
+            return { success: true, balance: this.state.balance };
+          }
+        }
+
+        // If refresh failed or retry failed, return error
+        const error = result.message || 'Failed to get balance';
+        this.log(`❌ Balance fetch failed after refresh attempt: ${error}`);
+        return { success: false, error };
+      }
+
       if (result.success && result.data) {
         const previousBalance = this.state.balance;
         this.state.balance = result.data.balance;
