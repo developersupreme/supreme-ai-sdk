@@ -7,7 +7,10 @@ export interface User {
   id: number;
   email: string;
   name?: string;
-  organization?: string;
+  organization?: string; // Kept for backward compatibility
+  organizationId?: string;
+  organizationName?: string;
+  userRoleIds?: number[];
 }
 
 export interface AuthTokens {
@@ -98,6 +101,11 @@ export interface TokenResponseMessage extends IframeMessage {
   token?: string;
   refreshToken?: string;
   user?: User;
+  organization?: {
+    organizationId: string;
+    organizationName: string;
+    userRoleIds: number[];
+  };
   error?: string;
 }
 

@@ -178,14 +178,25 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`👤 User: ${data.user?.email || 'Unknown'}`);
       this.log(`🔐 Token length: ${data.token?.length || 0} characters`);
 
+      // Extract organization data from response
+      const enrichedUser = data.user ? {
+        ...data.user,
+        organizationId: data.organization?.organizationId,
+        organizationName: data.organization?.organizationName,
+        userRoleIds: data.organization?.userRoleIds
+      } : data.user;
+
       this.storage.set('auth', {
         token: data.token,
         refreshToken: data.refreshToken,
-        user: data.user
+        user: enrichedUser
       });
       this.log('💾 Tokens saved to storage');
+      if (data.organization) {
+        this.log(`🏢 Organization: ${data.organization.organizationName} (ID: ${data.organization.organizationId})`);
+      }
 
-      this.state.user = data.user || null;
+      this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
 
       this.log('🚀 Initializing with token...');
@@ -395,7 +406,16 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.log('💰 Fetching current balance...');
 
     try {
-      const result = await this.apiClient.get<{ balance: number }>('/balance');
+      // Build query parameters with organization_id if available
+      const params: Record<string, string> = {};
+      const organizationId = this.state.user?.organizationId;
+
+      if (organizationId) {
+        params.organization_id = organizationId;
+        this.log(`🏢 Including organization_id in balance request: ${organizationId}`);
+      }
+
+      const result = await this.apiClient.get<{ balance: number }>('/balance', params);
 
       // If 401 error, try refreshing token and retry once
       if (!result.success && result.error === 'Authentication failed') {
@@ -404,7 +424,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
         if (refreshed) {
           this.log('✅ Token refreshed, retrying balance fetch...');
-          const retryResult = await this.apiClient.get<{ balance: number }>('/balance');
+          const retryResult = await this.apiClient.get<{ balance: number }>('/balance', params);
 
           if (retryResult.success && retryResult.data) {
             const previousBalance = this.state.balance;

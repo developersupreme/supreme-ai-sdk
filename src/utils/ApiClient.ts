@@ -18,8 +18,8 @@ export class ApiClient {
   /**
    * Make a GET request
    */
-  async get<T = any>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>('GET', endpoint);
+  async get<T = any>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+    return this.request<T>('GET', endpoint, undefined, params);
   }
 
   /**
@@ -49,7 +49,8 @@ export class ApiClient {
   private async request<T>(
     method: string,
     endpoint: string,
-    body?: any
+    body?: any,
+    params?: Record<string, string>
   ): Promise<ApiResponse<T>> {
     const token = this.getToken();
 
@@ -61,7 +62,13 @@ export class ApiClient {
     }
 
     try {
-      const url = `${this.baseUrl}${endpoint}`;
+      let url = `${this.baseUrl}${endpoint}`;
+
+      // Add query parameters if provided
+      if (params && Object.keys(params).length > 0) {
+        const queryString = new URLSearchParams(params).toString();
+        url += `?${queryString}`;
+      }
 
       const headers: HeadersInit = {
         'Authorization': `Bearer ${token}`,
