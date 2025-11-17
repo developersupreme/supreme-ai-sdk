@@ -357,8 +357,10 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     private loadPersonas;
     /**
      * Get all personas for authenticated user
+     * @param organizationId - Optional organization ID to filter personas
+     * @param roleId - Optional role ID to filter personas
      */
-    getPersonas(): Promise<PersonasResult>;
+    getPersonas(organizationId?: string | number, roleId?: string | number): Promise<PersonasResult>;
     /**
      * Get specific persona by ID
      */
@@ -427,8 +429,10 @@ declare class PersonasClient {
     private makeRequest;
     /**
      * Get all personas
+     * @param organizationId - Optional organization ID to filter personas
+     * @param roleId - Optional role ID to filter personas
      */
-    getPersonas(): Promise<PersonasResult>;
+    getPersonas(organizationId?: string | number, roleId?: string | number): Promise<PersonasResult>;
     /**
      * Get a specific persona by ID
      */

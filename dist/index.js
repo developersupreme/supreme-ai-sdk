@@ -639,8 +639,10 @@ var PersonasClient = class {
   }
   /**
    * Get all personas
+   * @param organizationId - Optional organization ID to filter personas
+   * @param roleId - Optional role ID to filter personas
    */
-  async getPersonas() {
+  async getPersonas(organizationId, roleId) {
     this.log("\u{1F3AD} Fetching all personas...");
     const token = this.getAuthToken();
     if (!token) {
@@ -650,9 +652,37 @@ var PersonasClient = class {
         error: "Authentication required"
       };
     }
+    const hasOrgId = organizationId !== void 0 && organizationId !== null && organizationId !== "";
+    const hasRoleId = roleId !== void 0 && roleId !== null && roleId !== "";
+    if (hasOrgId || hasRoleId) {
+      if (!hasOrgId) {
+        this.log("\u274C organization_id is required when passing manual parameters");
+        return {
+          success: false,
+          error: "organization_id is required when passing manual parameters"
+        };
+      }
+      if (!hasRoleId) {
+        this.log("\u274C role_id is required when passing manual parameters");
+        return {
+          success: false,
+          error: "role_id is required when passing manual parameters"
+        };
+      }
+    }
     try {
-      this.log(`\u{1F4E1} Making request to: ${this.apiBaseUrl}/personas/jwt/list`);
-      const response = await fetch(`${this.apiBaseUrl}/personas/jwt/list`, {
+      const params = new URLSearchParams();
+      if (hasOrgId && hasRoleId) {
+        params.append("organization_id", String(organizationId));
+        params.append("role_id", String(roleId));
+        this.log(`\u{1F4CB} Manual filtering - organization_id: ${organizationId}, role_id: ${roleId}`);
+      } else {
+        this.log("\u{1F4CB} Auto filtering - using JWT token data");
+      }
+      const queryString = params.toString();
+      const url = `${this.apiBaseUrl}/personas/jwt/list${queryString ? `?${queryString}` : ""}`;
+      this.log(`\u{1F4E1} Making request to: ${url}`);
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -1267,13 +1297,15 @@ var CreditSystemClient = class extends EventEmitter {
   }
   /**
    * Get all personas for authenticated user
+   * @param organizationId - Optional organization ID to filter personas
+   * @param roleId - Optional role ID to filter personas
    */
-  async getPersonas() {
+  async getPersonas(organizationId, roleId) {
     if (!this.state.isAuthenticated) {
       return { success: false, error: "Not authenticated" };
     }
     this.log("\u{1F3AD} Fetching personas...");
-    const result = await this.personasClient.getPersonas();
+    const result = await this.personasClient.getPersonas(organizationId, roleId);
     if (result.success && result.personas) {
       this.state.personas = result.personas;
       this.emit("personasLoaded", { personas: result.personas });
@@ -1674,11 +1706,11 @@ function useCreditSystem(config) {
     }
     return await clientRef.current.getHistory(page, limit);
   }, []);
-  const getPersonas = (0, import_react.useCallback)(async () => {
+  const getPersonas = (0, import_react.useCallback)(async (organizationId, roleId) => {
     if (!clientRef.current) {
       return { success: false, error: "Client not initialized" };
     }
-    return await clientRef.current.getPersonas();
+    return await clientRef.current.getPersonas(organizationId, roleId);
   }, []);
   const getPersonaById = (0, import_react.useCallback)(async (id) => {
     if (!clientRef.current) {

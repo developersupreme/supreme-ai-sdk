@@ -706,15 +706,17 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
   /**
    * Get all personas for authenticated user
+   * @param organizationId - Optional organization ID to filter personas
+   * @param roleId - Optional role ID to filter personas
    */
-  async getPersonas(): Promise<PersonasResult> {
+  async getPersonas(organizationId?: string | number, roleId?: string | number): Promise<PersonasResult> {
     if (!this.state.isAuthenticated) {
       return { success: false, error: 'Not authenticated' };
     }
 
     this.log('🎭 Fetching personas...');
 
-    const result = await this.personasClient.getPersonas();
+    const result = await this.personasClient.getPersonas(organizationId, roleId);
 
     if (result.success && result.personas) {
       this.state.personas = result.personas;

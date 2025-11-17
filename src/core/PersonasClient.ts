@@ -87,8 +87,10 @@ export class PersonasClient {
 
   /**
    * Get all personas
+   * @param organizationId - Optional organization ID to filter personas
+   * @param roleId - Optional role ID to filter personas
    */
-  async getPersonas(): Promise<PersonasResult> {
+  async getPersonas(organizationId?: string | number, roleId?: string | number): Promise<PersonasResult> {
     this.log('🎭 Fetching all personas...');
 
     const token = this.getAuthToken();
@@ -100,10 +102,45 @@ export class PersonasClient {
       };
     }
 
-    try {
-      this.log(`📡 Making request to: ${this.apiBaseUrl}/personas/jwt/list`);
+    // If either parameter is provided, validate that both are provided and not blank
+    const hasOrgId = organizationId !== undefined && organizationId !== null && organizationId !== '';
+    const hasRoleId = roleId !== undefined && roleId !== null && roleId !== '';
 
-      const response = await fetch(`${this.apiBaseUrl}/personas/jwt/list`, {
+    if (hasOrgId || hasRoleId) {
+      // Manual mode: validate both params are provided
+      if (!hasOrgId) {
+        this.log('❌ organization_id is required when passing manual parameters');
+        return {
+          success: false,
+          error: 'organization_id is required when passing manual parameters'
+        };
+      }
+      if (!hasRoleId) {
+        this.log('❌ role_id is required when passing manual parameters');
+        return {
+          success: false,
+          error: 'role_id is required when passing manual parameters'
+        };
+      }
+    }
+
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (hasOrgId && hasRoleId) {
+        params.append('organization_id', String(organizationId));
+        params.append('role_id', String(roleId));
+        this.log(`📋 Manual filtering - organization_id: ${organizationId}, role_id: ${roleId}`);
+      } else {
+        this.log('📋 Auto filtering - using JWT token data');
+      }
+
+      const queryString = params.toString();
+      const url = `${this.apiBaseUrl}/personas/jwt/list${queryString ? `?${queryString}` : ''}`;
+
+      this.log(`📡 Making request to: ${url}`);
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -197,12 +197,12 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
   }, []);
 
   // Get personas
-  const getPersonas = useCallback(async (): Promise<PersonasResult> => {
+  const getPersonas = useCallback(async (organizationId?: string | number, roleId?: string | number): Promise<PersonasResult> => {
     if (!clientRef.current) {
       return { success: false, error: 'Client not initialized' };
     }
 
-    return await clientRef.current.getPersonas();
+    return await clientRef.current.getPersonas(organizationId, roleId);
   }, []);
 
   // Get persona by ID
