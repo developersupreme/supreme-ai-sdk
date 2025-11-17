@@ -41,6 +41,10 @@ interface User {
     id: number;
     email: string;
     name?: string;
+    organizations?: Array<{
+        id: string;
+        name: string;
+    }>;
     organization?: string;
     organizationId?: string;
     organizationName?: string;
