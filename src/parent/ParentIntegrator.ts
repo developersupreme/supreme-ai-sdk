@@ -10,6 +10,14 @@ export interface ParentConfig {
     refreshToken: string;
     user: User;
   } | null>;
+  getCurrentUserState?: () => Promise<{
+    orgId: string;
+    orgName: string;
+    userRole: string;
+    userId: string;
+    userRoleIds?: number[];
+    personas?: any[];
+  } | null>;
   allowedOrigins?: string[];
   debug?: boolean;
   onIframeReady?: () => void;
@@ -68,6 +76,10 @@ export class ParentIntegrator {
       switch (event.data.type) {
         case 'REQUEST_JWT_TOKEN':
           await this.handleTokenRequest();
+          break;
+
+        case 'REQUEST_CURRENT_USER_STATE':
+          await this.handleUserStateRequest();
           break;
 
         case 'CREDIT_SYSTEM_READY':
@@ -158,6 +170,66 @@ export class ParentIntegrator {
       this.sendToIframe('JWT_TOKEN_RESPONSE', {
         token: null,
         error: error.message || 'Failed to get token',
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  /**
+   * Handle user state request from iframe
+   */
+  private async handleUserStateRequest(): Promise<void> {
+    if (this.config.debug) {
+      console.log('[ParentIntegrator] Iframe requesting current user state');
+    }
+
+    try {
+      // Get user state from parent implementation (if provided)
+      if (this.config.getCurrentUserState) {
+        const userState = await this.config.getCurrentUserState();
+
+        if (userState) {
+          // Send user state to iframe
+          this.sendToIframe('RESPONSE_CURRENT_USER_STATE', {
+            userState: userState,
+            timestamp: Date.now()
+          });
+
+          if (this.config.debug) {
+            console.log('[ParentIntegrator] User state sent to iframe:', userState);
+          }
+        } else {
+          // Send failure response
+          this.sendToIframe('RESPONSE_CURRENT_USER_STATE', {
+            userState: null,
+            error: 'User state not available',
+            timestamp: Date.now()
+          });
+
+          if (this.config.debug) {
+            console.log('[ParentIntegrator] No user state available');
+          }
+        }
+      } else {
+        // getCurrentUserState callback not configured
+        this.sendToIframe('RESPONSE_CURRENT_USER_STATE', {
+          userState: null,
+          error: 'getCurrentUserState callback not configured',
+          timestamp: Date.now()
+        });
+
+        if (this.config.debug) {
+          console.log('[ParentIntegrator] getCurrentUserState callback not configured in ParentConfig');
+        }
+      }
+    } catch (error: any) {
+      if (this.config.debug) {
+        console.error('[ParentIntegrator] Error getting user state:', error);
+      }
+
+      this.sendToIframe('RESPONSE_CURRENT_USER_STATE', {
+        userState: null,
+        error: error.message || 'Failed to get user state',
         timestamp: Date.now()
       });
     }

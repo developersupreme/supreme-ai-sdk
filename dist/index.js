@@ -386,8 +386,8 @@ var ApiClient = class {
   /**
    * Make a GET request
    */
-  async get(endpoint) {
-    return this.request("GET", endpoint);
+  async get(endpoint, params) {
+    return this.request("GET", endpoint, void 0, params);
   }
   /**
    * Make a POST request
@@ -410,7 +410,7 @@ var ApiClient = class {
   /**
    * Make a request
    */
-  async request(method, endpoint, body) {
+  async request(method, endpoint, body, params) {
     const token = this.getToken();
     if (!token) {
       return {
@@ -419,7 +419,11 @@ var ApiClient = class {
       };
     }
     try {
-      const url = `${this.baseUrl}${endpoint}`;
+      let url = `${this.baseUrl}${endpoint}`;
+      if (params && Object.keys(params).length > 0) {
+        const queryString = new URLSearchParams(params).toString();
+        url += `?${queryString}`;
+      }
       const headers = {
         "Authorization": `Bearer ${token}`,
         "Accept": "application/json"
@@ -800,6 +804,10 @@ var CreditSystemClient = class extends EventEmitter {
       this.log("\u{1F4E8} Received JWT_TOKEN_RESPONSE from parent");
       this.handleParentTokenResponse(data);
     });
+    this.messageBridge.on("RESPONSE_CURRENT_USER_STATE", (data) => {
+      this.log("\u{1F4E8} Received RESPONSE_CURRENT_USER_STATE from parent");
+      this.log("\u{1F464} User State Data:", data.userState);
+    });
     this.log("\u{1F511} Requesting JWT token from parent...");
     this.log(`\u{1F4CD} Iframe origin: ${window.location.origin}`);
     this.messageBridge.sendToParent("REQUEST_JWT_TOKEN", {
@@ -827,13 +835,22 @@ var CreditSystemClient = class extends EventEmitter {
       this.log("\u{1F39F}\uFE0F JWT token received from parent");
       this.log(`\u{1F464} User: ${data.user?.email || "Unknown"}`);
       this.log(`\u{1F510} Token length: ${data.token?.length || 0} characters`);
+      const enrichedUser = data.user ? {
+        ...data.user,
+        organizationId: data.organization?.organizationId,
+        organizationName: data.organization?.organizationName,
+        userRoleIds: data.organization?.userRoleIds
+      } : data.user;
       this.storage.set("auth", {
         token: data.token,
         refreshToken: data.refreshToken,
-        user: data.user
+        user: enrichedUser
       });
       this.log("\u{1F4BE} Tokens saved to storage");
-      this.state.user = data.user || null;
+      if (data.organization) {
+        this.log(`\u{1F3E2} Organization: ${data.organization.organizationName} (ID: ${data.organization.organizationId})`);
+      }
+      this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
       this.log("\u{1F680} Initializing with token...");
       this.initializeWithToken();
@@ -997,13 +1014,19 @@ var CreditSystemClient = class extends EventEmitter {
     }
     this.log("\u{1F4B0} Fetching current balance...");
     try {
-      const result = await this.apiClient.get("/balance");
+      const params = {};
+      const organizationId = this.state.user?.organizationId;
+      if (organizationId) {
+        params.organization_id = organizationId;
+        this.log(`\u{1F3E2} Including organization_id in balance request: ${organizationId}`);
+      }
+      const result = await this.apiClient.get("/balance", params);
       if (!result.success && result.error === "Authentication failed") {
         this.log("\u26A0\uFE0F Balance fetch got 401 - attempting token refresh...");
         const refreshed = await this.refreshToken();
         if (refreshed) {
           this.log("\u2705 Token refreshed, retrying balance fetch...");
-          const retryResult = await this.apiClient.get("/balance");
+          const retryResult = await this.apiClient.get("/balance", params);
           if (retryResult.success && retryResult.data) {
             const previousBalance = this.state.balance;
             this.state.balance = retryResult.data.balance;
@@ -1242,6 +1265,97 @@ var CreditSystemClient = class extends EventEmitter {
     }
     this.log(`\u{1F3AD} Fetching persona ID: ${id}`);
     return await this.personasClient.getPersonaById(id);
+  }
+  // ===================================================================
+  // USER STATE METHODS
+  // ===================================================================
+  /**
+   * Request current user state from parent page (embedded mode only)
+   */
+  async requestCurrentUserState() {
+    if (this.state.mode !== "embedded") {
+      this.log("\u26A0\uFE0F requestCurrentUserState blocked: Only available in embedded mode");
+      return {
+        success: false,
+        error: "requestCurrentUserState is only available in embedded mode"
+      };
+    }
+    this.log("\u{1F464} Requesting current user state from parent...");
+    return new Promise((resolve) => {
+      const responseHandler = (data) => {
+        this.log("\u2705 User state response received from parent");
+        console.log("\u{1F464} RESPONSE_CURRENT_USER_STATE:", data.userState);
+        if (data.userState) {
+          this.log(`\u{1F3E2} Organization: ${data.userState.orgName} (ID: ${data.userState.orgId})`);
+          this.log(`\u{1F464} User ID: ${data.userState.userId}`);
+          this.log(`\u{1F3AD} User Role: ${data.userState.userRole}`);
+          if (data.userState.userRoleIds) {
+            this.log(`\u{1F3AD} User Role IDs: [${data.userState.userRoleIds.join(", ")}]`);
+          }
+          if (data.userState.personas) {
+            this.log(`\u{1F4CB} Personas Count: ${data.userState.personas.length}`);
+          }
+          const auth = this.storage.get("auth");
+          if (auth && auth.user) {
+            const updatedUser = {
+              ...auth.user,
+              organizationId: data.userState.orgId,
+              organizationName: data.userState.orgName,
+              userId: data.userState.userId,
+              userRole: data.userState.userRole,
+              // Also update userRoleIds if provided (for consistency with JWT token response)
+              ...data.userState.userRoleIds && { userRoleIds: data.userState.userRoleIds }
+            };
+            this.storage.set("auth", {
+              ...auth,
+              user: updatedUser
+            });
+            this.state.user = updatedUser;
+            if (data.userState.personas) {
+              this.state.personas = data.userState.personas;
+            }
+            this.log("\u{1F4BE} User state saved and overridden in storage");
+            this.log("\u{1F4CA} Updated user fields:", {
+              organizationId: updatedUser.organizationId,
+              organizationName: updatedUser.organizationName,
+              userId: updatedUser.userId,
+              userRole: updatedUser.userRole,
+              userRoleIds: updatedUser.userRoleIds
+            });
+          }
+          resolve({
+            success: true,
+            userState: data.userState
+          });
+        } else if (data.error) {
+          this.log(`\u274C User state request error: ${data.error}`);
+          resolve({
+            success: false,
+            error: data.error
+          });
+        } else {
+          this.log("\u274C Invalid user state response from parent");
+          resolve({
+            success: false,
+            error: "Invalid response from parent"
+          });
+        }
+        this.messageBridge.off("RESPONSE_CURRENT_USER_STATE", responseHandler);
+      };
+      this.messageBridge.on("RESPONSE_CURRENT_USER_STATE", responseHandler);
+      this.messageBridge.sendToParent("REQUEST_CURRENT_USER_STATE", {
+        origin: window.location.origin,
+        timestamp: Date.now()
+      });
+      setTimeout(() => {
+        this.log("\u23F0 User state request timeout - no response from parent");
+        this.messageBridge.off("RESPONSE_CURRENT_USER_STATE", responseHandler);
+        resolve({
+          success: false,
+          error: "Timeout waiting for parent response"
+        });
+      }, 5e3);
+    });
   }
   /**
    * Refresh JWT token
@@ -1538,6 +1652,12 @@ function useCreditSystem(config) {
     }
     return await clientRef.current.getPersonaById(id);
   }, []);
+  const requestCurrentUserState = (0, import_react.useCallback)(async () => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.requestCurrentUserState();
+  }, []);
   return {
     isInitialized,
     isAuthenticated,
@@ -1554,7 +1674,8 @@ function useCreditSystem(config) {
     addCredits,
     getHistory,
     getPersonas,
-    getPersonaById
+    getPersonaById,
+    requestCurrentUserState
   };
 }
 
@@ -1610,6 +1731,9 @@ var ParentIntegrator = class {
       switch (event.data.type) {
         case "REQUEST_JWT_TOKEN":
           await this.handleTokenRequest();
+          break;
+        case "REQUEST_CURRENT_USER_STATE":
+          await this.handleUserStateRequest();
           break;
         case "CREDIT_SYSTEM_READY":
           this.handleIframeReady(event.data);
@@ -1680,6 +1804,55 @@ var ParentIntegrator = class {
       this.sendToIframe("JWT_TOKEN_RESPONSE", {
         token: null,
         error: error.message || "Failed to get token",
+        timestamp: Date.now()
+      });
+    }
+  }
+  /**
+   * Handle user state request from iframe
+   */
+  async handleUserStateRequest() {
+    if (this.config.debug) {
+      console.log("[ParentIntegrator] Iframe requesting current user state");
+    }
+    try {
+      if (this.config.getCurrentUserState) {
+        const userState = await this.config.getCurrentUserState();
+        if (userState) {
+          this.sendToIframe("RESPONSE_CURRENT_USER_STATE", {
+            userState,
+            timestamp: Date.now()
+          });
+          if (this.config.debug) {
+            console.log("[ParentIntegrator] User state sent to iframe:", userState);
+          }
+        } else {
+          this.sendToIframe("RESPONSE_CURRENT_USER_STATE", {
+            userState: null,
+            error: "User state not available",
+            timestamp: Date.now()
+          });
+          if (this.config.debug) {
+            console.log("[ParentIntegrator] No user state available");
+          }
+        }
+      } else {
+        this.sendToIframe("RESPONSE_CURRENT_USER_STATE", {
+          userState: null,
+          error: "getCurrentUserState callback not configured",
+          timestamp: Date.now()
+        });
+        if (this.config.debug) {
+          console.log("[ParentIntegrator] getCurrentUserState callback not configured in ParentConfig");
+        }
+      }
+    } catch (error) {
+      if (this.config.debug) {
+        console.error("[ParentIntegrator] Error getting user state:", error);
+      }
+      this.sendToIframe("RESPONSE_CURRENT_USER_STATE", {
+        userState: null,
+        error: error.message || "Failed to get user state",
         timestamp: Date.now()
       });
     }

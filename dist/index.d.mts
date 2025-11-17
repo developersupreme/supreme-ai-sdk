@@ -42,6 +42,11 @@ interface User {
     email: string;
     name?: string;
     organization?: string;
+    organizationId?: string;
+    organizationName?: string;
+    userRoleIds?: number[];
+    userId?: string;
+    userRole?: string;
 }
 interface AuthTokens {
     access_token: string;
@@ -117,6 +122,27 @@ interface TokenResponseMessage extends IframeMessage {
     token?: string;
     refreshToken?: string;
     user?: User;
+    organization?: {
+        organizationId: string;
+        organizationName: string;
+        userRoleIds: number[];
+    };
+    error?: string;
+}
+interface UserStateRequestMessage extends IframeMessage {
+    type: 'REQUEST_CURRENT_USER_STATE';
+    origin: string;
+}
+interface UserStateResponseMessage extends IframeMessage {
+    type: 'RESPONSE_CURRENT_USER_STATE';
+    userState?: {
+        orgId: string;
+        orgName: string;
+        userRole: string;
+        userId: string;
+        userRoleIds?: number[];
+        personas?: any[];
+    };
     error?: string;
 }
 type CreditSDKEvents = {
@@ -227,6 +253,7 @@ interface UseCreditSystemReturn {
     getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
     getPersonas: () => Promise<PersonasResult>;
     getPersonaById: (id: number) => Promise<PersonaResult>;
+    requestCurrentUserState: () => Promise<UserStateResult>;
 }
 interface Persona {
     id: number;
@@ -242,6 +269,16 @@ interface PersonasResult extends OperationResult {
 }
 interface PersonaResult extends OperationResult {
     persona?: Persona;
+}
+interface UserStateResult extends OperationResult {
+    userState?: {
+        orgId: string;
+        orgName: string;
+        userRole: string;
+        userId: string;
+        userRoleIds?: number[];
+        personas?: any[];
+    };
 }
 
 /**
@@ -320,6 +357,10 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      * Get specific persona by ID
      */
     getPersonaById(id: number): Promise<PersonaResult>;
+    /**
+     * Request current user state from parent page (embedded mode only)
+     */
+    requestCurrentUserState(): Promise<UserStateResult>;
     /**
      * Refresh JWT token
      */
@@ -411,6 +452,14 @@ interface ParentConfig {
         refreshToken: string;
         user: User;
     } | null>;
+    getCurrentUserState?: () => Promise<{
+        orgId: string;
+        orgName: string;
+        userRole: string;
+        userId: string;
+        userRoleIds?: number[];
+        personas?: any[];
+    } | null>;
     allowedOrigins?: string[];
     debug?: boolean;
     onIframeReady?: () => void;
@@ -438,6 +487,10 @@ declare class ParentIntegrator {
      * Handle JWT token request from iframe
      */
     private handleTokenRequest;
+    /**
+     * Handle user state request from iframe
+     */
+    private handleUserStateRequest;
     /**
      * Handle iframe ready event
      */
@@ -506,4 +559,4 @@ declare class ParentIntegrator {
  * @packageDocumentation
  */
 
-export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type SDKState, type SpendResponse, type SpendResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, CreditSystemClient as default, useCreditContext, useCreditSystem };
+export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type SDKState, type SpendResponse, type SpendResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, type UserStateRequestMessage, type UserStateResponseMessage, type UserStateResult, CreditSystemClient as default, useCreditContext, useCreditSystem };

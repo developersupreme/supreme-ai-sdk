@@ -21,7 +21,9 @@ import type {
   TokenResponseMessage,
   PersonasResult,
   PersonaResult,
-  Persona
+  Persona,
+  UserStateResponseMessage,
+  UserStateResult
 } from '../types';
 
 export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
@@ -142,6 +144,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.messageBridge.on('JWT_TOKEN_RESPONSE', (data: TokenResponseMessage) => {
       this.log('📨 Received JWT_TOKEN_RESPONSE from parent');
       this.handleParentTokenResponse(data);
+    });
+
+    this.messageBridge.on('RESPONSE_CURRENT_USER_STATE', (data: UserStateResponseMessage) => {
+      this.log('📨 Received RESPONSE_CURRENT_USER_STATE from parent');
+      this.log('👤 User State Data:', data.userState);
     });
 
     // Request JWT token from parent
@@ -711,6 +718,123 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
     this.log(`🎭 Fetching persona ID: ${id}`);
     return await this.personasClient.getPersonaById(id);
+  }
+
+  // ===================================================================
+  // USER STATE METHODS
+  // ===================================================================
+
+  /**
+   * Request current user state from parent page (embedded mode only)
+   */
+  async requestCurrentUserState(): Promise<UserStateResult> {
+    if (this.state.mode !== 'embedded') {
+      this.log('⚠️ requestCurrentUserState blocked: Only available in embedded mode');
+      return {
+        success: false,
+        error: 'requestCurrentUserState is only available in embedded mode'
+      };
+    }
+
+    this.log('👤 Requesting current user state from parent...');
+
+    return new Promise((resolve) => {
+      // Set up one-time listener for response
+      const responseHandler = (data: UserStateResponseMessage) => {
+        this.log('✅ User state response received from parent');
+
+        // Console log the response data as requested
+        console.log('👤 RESPONSE_CURRENT_USER_STATE:', data.userState);
+
+        if (data.userState) {
+          this.log(`🏢 Organization: ${data.userState.orgName} (ID: ${data.userState.orgId})`);
+          this.log(`👤 User ID: ${data.userState.userId}`);
+          this.log(`🎭 User Role: ${data.userState.userRole}`);
+          if (data.userState.userRoleIds) {
+            this.log(`🎭 User Role IDs: [${data.userState.userRoleIds.join(', ')}]`);
+          }
+          if (data.userState.personas) {
+            this.log(`📋 Personas Count: ${data.userState.personas.length}`);
+          }
+
+          // Save/override user state data in storage (same place as JWT token response)
+          const auth = this.storage.get('auth');
+          if (auth && auth.user) {
+            // Update existing user with new state data
+            const updatedUser = {
+              ...auth.user,
+              organizationId: data.userState.orgId,
+              organizationName: data.userState.orgName,
+              userId: data.userState.userId,
+              userRole: data.userState.userRole,
+              // Also update userRoleIds if provided (for consistency with JWT token response)
+              ...(data.userState.userRoleIds && { userRoleIds: data.userState.userRoleIds })
+            };
+
+            this.storage.set('auth', {
+              ...auth,
+              user: updatedUser
+            });
+
+            // Update SDK state
+            this.state.user = updatedUser;
+
+            // Update personas if provided
+            if (data.userState.personas) {
+              this.state.personas = data.userState.personas;
+            }
+
+            this.log('💾 User state saved and overridden in storage');
+            this.log('📊 Updated user fields:', {
+              organizationId: updatedUser.organizationId,
+              organizationName: updatedUser.organizationName,
+              userId: updatedUser.userId,
+              userRole: updatedUser.userRole,
+              userRoleIds: updatedUser.userRoleIds
+            });
+          }
+
+          resolve({
+            success: true,
+            userState: data.userState
+          });
+        } else if (data.error) {
+          this.log(`❌ User state request error: ${data.error}`);
+          resolve({
+            success: false,
+            error: data.error
+          });
+        } else {
+          this.log('❌ Invalid user state response from parent');
+          resolve({
+            success: false,
+            error: 'Invalid response from parent'
+          });
+        }
+
+        // Remove listener after handling response
+        this.messageBridge.off('RESPONSE_CURRENT_USER_STATE', responseHandler);
+      };
+
+      // Add listener for response
+      this.messageBridge.on('RESPONSE_CURRENT_USER_STATE', responseHandler);
+
+      // Send request to parent
+      this.messageBridge.sendToParent('REQUEST_CURRENT_USER_STATE', {
+        origin: window.location.origin,
+        timestamp: Date.now()
+      });
+
+      // Set timeout for response
+      setTimeout(() => {
+        this.log('⏰ User state request timeout - no response from parent');
+        this.messageBridge.off('RESPONSE_CURRENT_USER_STATE', responseHandler);
+        resolve({
+          success: false,
+          error: 'Timeout waiting for parent response'
+        });
+      }, 5000); // 5 second timeout
+    });
   }
 
   /**

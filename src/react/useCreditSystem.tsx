@@ -15,7 +15,8 @@ import type {
   UseCreditSystemReturn,
   Persona,
   PersonasResult,
-  PersonaResult
+  PersonaResult,
+  UserStateResult
 } from '../types';
 
 export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn {
@@ -213,6 +214,15 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     return await clientRef.current.getPersonaById(id);
   }, []);
 
+  // Request current user state from parent
+  const requestCurrentUserState = useCallback(async (): Promise<UserStateResult> => {
+    if (!clientRef.current) {
+      return { success: false, error: 'Client not initialized' };
+    }
+
+    return await clientRef.current.requestCurrentUserState();
+  }, []);
+
   return {
     isInitialized,
     isAuthenticated,
@@ -229,6 +239,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     addCredits,
     getHistory,
     getPersonas,
-    getPersonaById
+    getPersonaById,
+    requestCurrentUserState
   };
 }

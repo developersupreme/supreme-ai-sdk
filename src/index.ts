@@ -39,6 +39,8 @@ export type {
   IframeMessage,
   TokenRequestMessage,
   TokenResponseMessage,
+  UserStateRequestMessage,
+  UserStateResponseMessage,
 
   // Events
   CreditSDKEvents,
@@ -60,6 +62,9 @@ export type {
   Persona,
   PersonasResult,
   PersonaResult,
+
+  // User State
+  UserStateResult,
 
   // React
   UseCreditSystemReturn

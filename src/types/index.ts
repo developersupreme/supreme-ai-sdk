@@ -11,6 +11,8 @@ export interface User {
   organizationId?: string;
   organizationName?: string;
   userRoleIds?: number[];
+  userId?: string; // User ID from parent state
+  userRole?: string; // User role from parent state
 }
 
 export interface AuthTokens {
@@ -105,6 +107,24 @@ export interface TokenResponseMessage extends IframeMessage {
     organizationId: string;
     organizationName: string;
     userRoleIds: number[];
+  };
+  error?: string;
+}
+
+export interface UserStateRequestMessage extends IframeMessage {
+  type: 'REQUEST_CURRENT_USER_STATE';
+  origin: string;
+}
+
+export interface UserStateResponseMessage extends IframeMessage {
+  type: 'RESPONSE_CURRENT_USER_STATE';
+  userState?: {
+    orgId: string;
+    orgName: string;
+    userRole: string;
+    userId: string;
+    userRoleIds?: number[]; // Array of role IDs (for consistency with JWT token response)
+    personas?: any[];
   };
   error?: string;
 }
@@ -211,6 +231,7 @@ export interface UseCreditSystemReturn {
   getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
   getPersonas: () => Promise<PersonasResult>;
   getPersonaById: (id: number) => Promise<PersonaResult>;
+  requestCurrentUserState: () => Promise<UserStateResult>;
 }
 
 // Persona Types
@@ -230,4 +251,16 @@ export interface PersonasResult extends OperationResult {
 
 export interface PersonaResult extends OperationResult {
   persona?: Persona;
+}
+
+// User State Result
+export interface UserStateResult extends OperationResult {
+  userState?: {
+    orgId: string;
+    orgName: string;
+    userRole: string;
+    userId: string;
+    userRoleIds?: number[];
+    personas?: any[];
+  };
 }
