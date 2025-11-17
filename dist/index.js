@@ -120,15 +120,27 @@ var MessageBridge = class extends EventEmitter {
    */
   setupMessageListener() {
     this.messageHandler = (event) => {
+      if (this.debug) {
+        console.log("[SDK MessageBridge] Received postMessage:", {
+          origin: event.origin,
+          type: event.data?.type,
+          allowedOrigins: this.allowedOrigins,
+          isValid: this.isValidOrigin(event.origin)
+        });
+      }
       if (!this.isValidOrigin(event.origin)) {
         if (this.debug) {
-          console.warn("Message from untrusted origin:", event.origin);
+          console.warn("[SDK MessageBridge] \u274C Message from untrusted origin:", {
+            receivedOrigin: event.origin,
+            allowedOrigins: this.allowedOrigins,
+            messageType: event.data?.type
+          });
         }
         return;
       }
       if (event.data && event.data.type) {
         if (this.debug) {
-          console.log("Message received:", event.data);
+          console.log("[SDK MessageBridge] \u2705 Message accepted:", event.data);
         }
         this.emit(event.data.type, event.data);
         this.emit("message", event.data);
@@ -849,6 +861,13 @@ var CreditSystemClient = class extends EventEmitter {
       this.log("\u{1F4BE} Tokens saved to storage");
       if (data.organization) {
         this.log(`\u{1F3E2} Organization: ${data.organization.organizationName} (ID: ${data.organization.organizationId})`);
+        const orgId = data.organization.organizationId;
+        if (orgId) {
+          const expires = /* @__PURE__ */ new Date();
+          expires.setDate(expires.getDate() + 30);
+          document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+          this.log(`\u{1F36A} Set organization cookie: user-selected-org-id=${orgId}`);
+        }
       }
       this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
@@ -1013,13 +1032,18 @@ var CreditSystemClient = class extends EventEmitter {
       return { success: false, error: "Not authenticated" };
     }
     this.log("\u{1F4B0} Fetching current balance...");
+    this.log("\u{1F464} Current user state:", this.state.user);
     try {
       const params = {};
       const organizationId = this.state.user?.organizationId;
+      this.log(`\u{1F50D} Organization ID from user state: ${organizationId} (type: ${typeof organizationId})`);
       if (organizationId) {
-        params.organization_id = organizationId;
-        this.log(`\u{1F3E2} Including organization_id in balance request: ${organizationId}`);
+        params.organization_id = String(organizationId);
+        this.log(`\u{1F3E2} Including organization_id in balance request: ${params.organization_id}`);
+      } else {
+        this.log("\u26A0\uFE0F WARNING: No organization_id in user state!");
       }
+      this.log(`\u{1F4E4} Balance request params:`, params);
       const result = await this.apiClient.get("/balance", params);
       if (!result.success && result.error === "Authentication failed") {
         this.log("\u26A0\uFE0F Balance fetch got 401 - attempting token refresh...");

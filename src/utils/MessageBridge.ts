@@ -25,10 +25,23 @@ export class MessageBridge extends EventEmitter {
    */
   private setupMessageListener(): void {
     this.messageHandler = (event: MessageEvent) => {
+      if (this.debug) {
+        console.log('[SDK MessageBridge] Received postMessage:', {
+          origin: event.origin,
+          type: event.data?.type,
+          allowedOrigins: this.allowedOrigins,
+          isValid: this.isValidOrigin(event.origin)
+        });
+      }
+
       // Validate origin
       if (!this.isValidOrigin(event.origin)) {
         if (this.debug) {
-          console.warn('Message from untrusted origin:', event.origin);
+          console.warn('[SDK MessageBridge] ❌ Message from untrusted origin:', {
+            receivedOrigin: event.origin,
+            allowedOrigins: this.allowedOrigins,
+            messageType: event.data?.type
+          });
         }
         return;
       }
@@ -36,7 +49,7 @@ export class MessageBridge extends EventEmitter {
       // Process message
       if (event.data && event.data.type) {
         if (this.debug) {
-          console.log('Message received:', event.data);
+          console.log('[SDK MessageBridge] ✅ Message accepted:', event.data);
         }
 
         // Emit event for the message type

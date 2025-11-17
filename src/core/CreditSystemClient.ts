@@ -201,6 +201,15 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log('💾 Tokens saved to storage');
       if (data.organization) {
         this.log(`🏢 Organization: ${data.organization.organizationName} (ID: ${data.organization.organizationId})`);
+
+        // Set organization cookie for backend API compatibility
+        const orgId = data.organization.organizationId;
+        if (orgId) {
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 30); // 30 days
+          document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+          this.log(`🍪 Set organization cookie: user-selected-org-id=${orgId}`);
+        }
       }
 
       this.state.user = enrichedUser || null;
@@ -411,16 +420,23 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     this.log('💰 Fetching current balance...');
+    this.log('👤 Current user state:', this.state.user);
 
     try {
       // Build query parameters with organization_id if available
       const params: Record<string, string> = {};
       const organizationId = this.state.user?.organizationId;
 
+      this.log(`🔍 Organization ID from user state: ${organizationId} (type: ${typeof organizationId})`);
+
       if (organizationId) {
-        params.organization_id = organizationId;
-        this.log(`🏢 Including organization_id in balance request: ${organizationId}`);
+        params.organization_id = String(organizationId);
+        this.log(`🏢 Including organization_id in balance request: ${params.organization_id}`);
+      } else {
+        this.log('⚠️ WARNING: No organization_id in user state!');
       }
+
+      this.log(`📤 Balance request params:`, params);
 
       const result = await this.apiClient.get<{ balance: number }>('/balance', params);
 
