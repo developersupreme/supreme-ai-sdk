@@ -10,6 +10,8 @@ export interface User {
   organization?: string; // Kept for backward compatibility
   organizationId?: string;
   organizationName?: string;
+  organizationSlug?: string; // Organization slug from parent state
+  organizationDomain?: string; // Organization domain from parent state
   userRoleIds?: number[];
   userId?: string; // User ID from parent state
   userRole?: string; // User role from parent state
@@ -121,6 +123,8 @@ export interface UserStateResponseMessage extends IframeMessage {
   userState?: {
     orgId: string;
     orgName: string;
+    orgSlug?: string;
+    orgDomain?: string;
     userRole: string;
     userId: string;
     userRoleIds?: number[]; // Array of role IDs (for consistency with JWT token response)
@@ -258,6 +262,8 @@ export interface UserStateResult extends OperationResult {
   userState?: {
     orgId: string;
     orgName: string;
+    orgSlug?: string;
+    orgDomain?: string;
     userRole: string;
     userId: string;
     userRoleIds?: number[];

@@ -748,6 +748,12 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
         if (data.userState) {
           this.log(`🏢 Organization: ${data.userState.orgName} (ID: ${data.userState.orgId})`);
+          if (data.userState.orgSlug) {
+            this.log(`🔗 Organization Slug: ${data.userState.orgSlug}`);
+          }
+          if (data.userState.orgDomain) {
+            this.log(`🌐 Organization Domain: ${data.userState.orgDomain}`);
+          }
           this.log(`👤 User ID: ${data.userState.userId}`);
           this.log(`🎭 User Role: ${data.userState.userRole}`);
           if (data.userState.userRoleIds) {
@@ -765,6 +771,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
               ...auth.user,
               organizationId: data.userState.orgId,
               organizationName: data.userState.orgName,
+              ...(data.userState.orgSlug && { organizationSlug: data.userState.orgSlug }),
+              ...(data.userState.orgDomain && { organizationDomain: data.userState.orgDomain }),
               userId: data.userState.userId,
               userRole: data.userState.userRole,
               // Also update userRoleIds if provided (for consistency with JWT token response)
@@ -788,6 +796,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
             this.log('📊 Updated user fields:', {
               organizationId: updatedUser.organizationId,
               organizationName: updatedUser.organizationName,
+              organizationSlug: updatedUser.organizationSlug,
+              organizationDomain: updatedUser.organizationDomain,
               userId: updatedUser.userId,
               userRole: updatedUser.userRole,
               userRoleIds: updatedUser.userRoleIds

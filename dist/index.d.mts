@@ -44,6 +44,8 @@ interface User {
     organization?: string;
     organizationId?: string;
     organizationName?: string;
+    organizationSlug?: string;
+    organizationDomain?: string;
     userRoleIds?: number[];
     userId?: string;
     userRole?: string;
@@ -138,6 +140,8 @@ interface UserStateResponseMessage extends IframeMessage {
     userState?: {
         orgId: string;
         orgName: string;
+        orgSlug?: string;
+        orgDomain?: string;
         userRole: string;
         userId: string;
         userRoleIds?: number[];
@@ -274,6 +278,8 @@ interface UserStateResult extends OperationResult {
     userState?: {
         orgId: string;
         orgName: string;
+        orgSlug?: string;
+        orgDomain?: string;
         userRole: string;
         userId: string;
         userRoleIds?: number[];

@@ -1287,6 +1287,12 @@ var CreditSystemClient = class extends EventEmitter {
         console.log("\u{1F464} RESPONSE_CURRENT_USER_STATE:", data.userState);
         if (data.userState) {
           this.log(`\u{1F3E2} Organization: ${data.userState.orgName} (ID: ${data.userState.orgId})`);
+          if (data.userState.orgSlug) {
+            this.log(`\u{1F517} Organization Slug: ${data.userState.orgSlug}`);
+          }
+          if (data.userState.orgDomain) {
+            this.log(`\u{1F310} Organization Domain: ${data.userState.orgDomain}`);
+          }
           this.log(`\u{1F464} User ID: ${data.userState.userId}`);
           this.log(`\u{1F3AD} User Role: ${data.userState.userRole}`);
           if (data.userState.userRoleIds) {
@@ -1301,6 +1307,8 @@ var CreditSystemClient = class extends EventEmitter {
               ...auth.user,
               organizationId: data.userState.orgId,
               organizationName: data.userState.orgName,
+              ...data.userState.orgSlug && { organizationSlug: data.userState.orgSlug },
+              ...data.userState.orgDomain && { organizationDomain: data.userState.orgDomain },
               userId: data.userState.userId,
               userRole: data.userState.userRole,
               // Also update userRoleIds if provided (for consistency with JWT token response)
@@ -1318,6 +1326,8 @@ var CreditSystemClient = class extends EventEmitter {
             this.log("\u{1F4CA} Updated user fields:", {
               organizationId: updatedUser.organizationId,
               organizationName: updatedUser.organizationName,
+              organizationSlug: updatedUser.organizationSlug,
+              organizationDomain: updatedUser.organizationDomain,
               userId: updatedUser.userId,
               userRole: updatedUser.userRole,
               userRoleIds: updatedUser.userRoleIds
