@@ -399,11 +399,18 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      */
     getHistory(page?: number, limit?: number): Promise<HistoryResult>;
     /**
+     * Read personas from cookie
+     */
+    private getPersonasFromCookie;
+    /**
      * Load personas for authenticated user
+     * First tries to load from cookie, falls back to API if cookie is empty
      */
     private loadPersonas;
     /**
      * Get all personas for authenticated user
+     * If no filters (organizationId/roleId) are provided, returns personas from cookie
+     * Otherwise fetches from API with filters
      * @param organizationId - Optional organization ID to filter personas
      * @param roleId - Optional role ID to filter personas
      */

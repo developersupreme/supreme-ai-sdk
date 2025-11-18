@@ -691,17 +691,60 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   // ===================================================================
 
   /**
+   * Read personas from cookie
+   */
+  private getPersonasFromCookie(): Persona[] {
+    try {
+      const cookies = document.cookie.split(';');
+      const personasCookie = cookies.find(c => c.trim().startsWith('user-personas='));
+      if (personasCookie) {
+        const value = personasCookie.split('=')[1];
+        const decoded = decodeURIComponent(value);
+        const personas = JSON.parse(decoded);
+        this.log(`🍪 Found ${personas.length} personas in cookie`);
+        return personas;
+      }
+    } catch (error: any) {
+      this.log(`⚠️ Error reading personas from cookie: ${error.message}`);
+    }
+    return [];
+  }
+
+  /**
    * Load personas for authenticated user
+   * First tries to load from cookie, falls back to API if cookie is empty
    */
   private async loadPersonas(): Promise<void> {
     this.log('🎭 Loading personas...');
+
+    // First, try to get personas from cookie
+    const cookiePersonas = this.getPersonasFromCookie();
+
+    if (cookiePersonas.length > 0) {
+      this.log(`✅ Using ${cookiePersonas.length} personas from cookie (skipping API call)`);
+      this.state.personas = cookiePersonas;
+      this.emit('personasLoaded', { personas: cookiePersonas });
+
+      // Notify parent if in embedded mode
+      if (this.state.mode === 'embedded') {
+        this.log('📤 Sending PERSONAS_LOADED to parent');
+        this.messageBridge.sendToParent('PERSONAS_LOADED', {
+          personas: cookiePersonas,
+          timestamp: Date.now()
+        });
+      }
+      return;
+    }
+
+    // If cookie is empty, fall back to API
+    this.log('🍪 No personas in cookie, fetching from API...');
 
     try {
       const result = await this.personasClient.getPersonas();
 
       if (result.success && result.personas) {
         this.state.personas = result.personas;
-        this.log(`✅ Loaded ${result.personas.length} personas`);
+        this.log(`✅ Loaded ${result.personas.length} personas from API`);
         this.emit('personasLoaded', { personas: result.personas });
 
         // Notify parent if in embedded mode
@@ -724,6 +767,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
   /**
    * Get all personas for authenticated user
+   * If no filters (organizationId/roleId) are provided, returns personas from cookie
+   * Otherwise fetches from API with filters
    * @param organizationId - Optional organization ID to filter personas
    * @param roleId - Optional role ID to filter personas
    */
@@ -733,6 +778,19 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     this.log('🎭 Fetching personas...');
+
+    // If no filters provided, try to use cookie first
+    if (!organizationId && !roleId) {
+      const cookiePersonas = this.getPersonasFromCookie();
+      if (cookiePersonas.length > 0) {
+        this.log(`✅ Returning ${cookiePersonas.length} personas from cookie`);
+        this.state.personas = cookiePersonas;
+        return { success: true, personas: cookiePersonas };
+      }
+      this.log('🍪 No personas in cookie, fetching from API...');
+    } else {
+      this.log('🔍 Filters provided, fetching from API...');
+    }
 
     const result = await this.personasClient.getPersonas(organizationId, roleId);
 
