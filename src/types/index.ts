@@ -7,7 +7,7 @@ export interface User {
   id: number;
   email: string;
   name?: string;
-  organizations?: Array<{ id: string; name: string }>;
+  organizations?: Array<{ id?: string;name?: string; slug?: string; domain?: string; selectedStatus?:boolean}>;
   organization?: string; // Kept for backward compatibility
   organizationId?: string;
   organizationName?: string;
