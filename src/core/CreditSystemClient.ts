@@ -185,12 +185,14 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`👤 User: ${data.user?.email || 'Unknown'}`);
       this.log(`🔐 Token length: ${data.token?.length || 0} characters`);
 
-      // Extract organization data from response
+      // Extract organization data, organizations array, and personas from response
       const enrichedUser = data.user ? {
         ...data.user,
         organizationId: data.organization?.organizationId,
         organizationName: data.organization?.organizationName,
-        userRoleIds: data.organization?.userRoleIds
+        userRoleIds: data.organization?.userRoleIds,
+        organizations: (data as any).organizations || data.user.organizations, // Include organizations array
+        personas: (data as any).personas || data.user.personas, // Include personas array
       } : data.user;
 
       this.storage.set('auth', {
@@ -199,8 +201,24 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         user: enrichedUser
       });
       this.log('💾 Tokens saved to storage');
+
+      // Store personas if provided in JWT response
+      if ((data as any).personas) {
+        this.state.personas = (data as any).personas;
+        this.log(`📋 Personas received in JWT: ${(data as any).personas.length}`);
+      }
+
+      // Store organizations if provided
+      if ((data as any).organizations) {
+        this.log(`🏢 Organizations received in JWT: ${(data as any).organizations.length}`);
+        const selectedOrg = (data as any).organizations.find((org: any) => org.selectedStatus === true);
+        if (selectedOrg) {
+          this.log(`✅ Selected Organization: ${selectedOrg.name} (ID: ${selectedOrg.id})`);
+        }
+      }
+
       if (data.organization) {
-        this.log(`🏢 Organization: ${data.organization.organizationName} (ID: ${data.organization.organizationId})`);
+        this.log(`🏢 Current Organization: ${data.organization.organizationName} (ID: ${data.organization.organizationId})`);
 
         // Set organization cookie for backend API compatibility
         const orgId = data.organization.organizationId;
@@ -857,6 +875,155 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       setTimeout(() => {
         this.log('⏰ User state request timeout - no response from parent');
         this.messageBridge.off('RESPONSE_CURRENT_USER_STATE', responseHandler);
+        resolve({
+          success: false,
+          error: 'Timeout waiting for parent response'
+        });
+      }, 5000); // 5 second timeout
+    });
+  }
+
+  /**
+   * Request user organizations from parent page (embedded mode only)
+   */
+  async requestUserOrganizations(): Promise<import('../types').UserOrgsResult> {
+    if (this.state.mode !== 'embedded') {
+      this.log('⚠️ requestUserOrganizations blocked: Only available in embedded mode');
+      return {
+        success: false,
+        error: 'requestUserOrganizations is only available in embedded mode'
+      };
+    }
+
+    this.log('🏢 Requesting user organizations from parent...');
+
+    return new Promise((resolve) => {
+      // Set up one-time listener for response
+      const responseHandler = (data: import('../types').UserOrgsResponseMessage) => {
+        this.log('✅ User organizations response received from parent');
+
+        // Console log the response data
+        console.log('🏢 RESPONSE_USER_ORGS:', data);
+
+        if (data.organizations) {
+          this.log(`📋 Organizations Count: ${data.organizations.length}`);
+
+          // Log selected organization
+          const selectedOrg = data.organizations.find(org => org.selectedStatus === true);
+          if (selectedOrg) {
+            this.log(`✅ Selected Organization: ${selectedOrg.name} (ID: ${selectedOrg.id})`);
+          }
+
+          resolve({
+            success: true,
+            organizations: data.organizations,
+            count: data.count || data.organizations.length
+          });
+        } else if (data.error) {
+          this.log(`❌ User organizations request error: ${data.error}`);
+          resolve({
+            success: false,
+            error: data.error
+          });
+        } else {
+          this.log('❌ Invalid user organizations response from parent');
+          resolve({
+            success: false,
+            error: 'Invalid response from parent'
+          });
+        }
+
+        // Remove listener after handling response
+        this.messageBridge.off('RESPONSE_USER_ORGS', responseHandler);
+      };
+
+      // Add listener for response
+      this.messageBridge.on('RESPONSE_USER_ORGS', responseHandler);
+
+      // Send request to parent
+      this.messageBridge.sendToParent('REQUEST_USER_ORGS', {
+        origin: window.location.origin,
+        timestamp: Date.now()
+      });
+
+      // Set timeout for response
+      setTimeout(() => {
+        this.log('⏰ User organizations request timeout - no response from parent');
+        this.messageBridge.off('RESPONSE_USER_ORGS', responseHandler);
+        resolve({
+          success: false,
+          error: 'Timeout waiting for parent response'
+        });
+      }, 5000); // 5 second timeout
+    });
+  }
+
+  /**
+   * Request user personas from parent page (embedded mode only)
+   */
+  async requestUserPersonas(): Promise<import('../types').UserPersonasResult> {
+    if (this.state.mode !== 'embedded') {
+      this.log('⚠️ requestUserPersonas blocked: Only available in embedded mode');
+      return {
+        success: false,
+        error: 'requestUserPersonas is only available in embedded mode'
+      };
+    }
+
+    this.log('👥 Requesting user personas from parent...');
+
+    return new Promise((resolve) => {
+      // Set up one-time listener for response
+      const responseHandler = (data: import('../types').UserPersonasResponseMessage) => {
+        this.log('✅ User personas response received from parent');
+
+        // Console log the response data
+        console.log('👥 RESPONSE_USER_PERSONAS:', data);
+
+        if (data.personas) {
+          this.log(`📋 Personas Count: ${data.personas.length}`);
+
+          // Log persona names
+          if (data.personas.length > 0) {
+            this.log(`📝 Personas: ${data.personas.map(p => p.name).join(', ')}`);
+          }
+
+          resolve({
+            success: true,
+            personas: data.personas,
+            count: data.count || data.personas.length
+          });
+        } else if (data.error) {
+          this.log(`❌ User personas request error: ${data.error}`);
+          resolve({
+            success: false,
+            error: data.error
+          });
+        } else {
+          this.log('❌ Invalid user personas response from parent');
+          resolve({
+            success: false,
+            error: 'Invalid response from parent'
+          });
+        }
+
+        // Remove listener after handling response
+        this.messageBridge.off('RESPONSE_USER_PERSONAS', responseHandler);
+      };
+
+      // Add listener for response
+      this.messageBridge.on('RESPONSE_USER_PERSONAS', responseHandler);
+
+      // Send request to parent
+      this.messageBridge.sendToParent('REQUEST_USER_PERSONAS', {
+        origin: window.location.origin,
+        timestamp: Date.now()
+      });
+
+      // Set timeout for response
+      setTimeout(() => {
+        this.log('⏰ User personas request timeout - no response from parent');
+        this.messageBridge.off('RESPONSE_USER_PERSONAS', responseHandler);
         resolve({
           success: false,
           error: 'Timeout waiting for parent response'

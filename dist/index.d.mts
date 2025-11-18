@@ -2,39 +2,6 @@ import * as react_jsx_runtime from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 
 /**
- * Type-safe EventEmitter implementation
- */
-type EventListener<T = any> = (data?: T) => void;
-declare class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
-    private events;
-    protected debug: boolean;
-    /**
-     * Subscribe to an event
-     */
-    on<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
-    /**
-     * Subscribe to an event once
-     */
-    once<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
-    /**
-     * Unsubscribe from an event
-     */
-    off<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
-    /**
-     * Emit an event
-     */
-    emit<K extends keyof Events>(event: K, data?: Events[K]): boolean;
-    /**
-     * Remove all listeners for an event or all events
-     */
-    removeAllListeners<K extends keyof Events>(event?: K): this;
-    /**
-     * Get listener count for an event
-     */
-    listenerCount<K extends keyof Events>(event: K): number;
-}
-
-/**
  * Supreme AI Credit SDK - Type Definitions
  */
 interface User {
@@ -42,8 +9,20 @@ interface User {
     email: string;
     name?: string;
     organizations?: Array<{
+        id?: string;
+        name?: string;
+        slug?: string;
+        domain?: string;
+        selectedStatus?: boolean;
+        credits?: number;
+        user_role_ids?: number[];
+    }>;
+    personas?: Array<{
         id: string;
         name: string;
+        description?: string;
+        category_id?: string | null;
+        category_name?: string;
     }>;
     organization?: string;
     organizationId?: string;
@@ -133,6 +112,22 @@ interface TokenResponseMessage extends IframeMessage {
         organizationName: string;
         userRoleIds: number[];
     };
+    organizations?: Array<{
+        id?: string;
+        name?: string;
+        slug?: string;
+        domain?: string;
+        selectedStatus?: boolean;
+        credits?: number;
+        user_role_ids?: number[];
+    }>;
+    personas?: Array<{
+        id: string;
+        name: string;
+        description?: string;
+        category_id?: string | null;
+        category_name?: string;
+    }>;
     error?: string;
 }
 interface UserStateRequestMessage extends IframeMessage {
@@ -244,6 +239,28 @@ interface HistoryResult extends OperationResult {
     page?: number;
     pages?: number;
 }
+interface UserOrgsResult extends OperationResult {
+    organizations?: Array<{
+        id?: string;
+        name?: string;
+        slug?: string;
+        domain?: string;
+        selectedStatus?: boolean;
+        credits?: number;
+        user_role_ids?: number[];
+    }>;
+    count?: number;
+}
+interface UserPersonasResult extends OperationResult {
+    personas?: Array<{
+        id: string;
+        name: string;
+        description?: string;
+        category_id?: string | null;
+        category_name?: string;
+    }>;
+    count?: number;
+}
 interface UseCreditSystemReturn {
     isInitialized: boolean;
     isAuthenticated: boolean;
@@ -262,6 +279,8 @@ interface UseCreditSystemReturn {
     getPersonas: () => Promise<PersonasResult>;
     getPersonaById: (id: number) => Promise<PersonaResult>;
     requestCurrentUserState: () => Promise<UserStateResult>;
+    requestUserOrganizations: () => Promise<UserOrgsResult>;
+    requestUserPersonas: () => Promise<UserPersonasResult>;
 }
 interface Persona {
     id: number;
@@ -292,8 +311,37 @@ interface UserStateResult extends OperationResult {
 }
 
 /**
- * Supreme AI Credit System SDK - Main Client
+ * Type-safe EventEmitter implementation
  */
+type EventListener<T = any> = (data?: T) => void;
+declare class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
+    private events;
+    protected debug: boolean;
+    /**
+     * Subscribe to an event
+     */
+    on<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
+    /**
+     * Subscribe to an event once
+     */
+    once<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
+    /**
+     * Unsubscribe from an event
+     */
+    off<K extends keyof Events>(event: K, listener: EventListener<Events[K]>): this;
+    /**
+     * Emit an event
+     */
+    emit<K extends keyof Events>(event: K, data?: Events[K]): boolean;
+    /**
+     * Remove all listeners for an event or all events
+     */
+    removeAllListeners<K extends keyof Events>(event?: K): this;
+    /**
+     * Get listener count for an event
+     */
+    listenerCount<K extends keyof Events>(event: K): number;
+}
 
 declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     private config;
@@ -373,6 +421,14 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      * Request current user state from parent page (embedded mode only)
      */
     requestCurrentUserState(): Promise<UserStateResult>;
+    /**
+     * Request user organizations from parent page (embedded mode only)
+     */
+    requestUserOrganizations(): Promise<UserOrgsResult>;
+    /**
+     * Request user personas from parent page (embedded mode only)
+     */
+    requestUserPersonas(): Promise<UserPersonasResult>;
     /**
      * Refresh JWT token
      */

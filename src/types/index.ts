@@ -7,7 +7,14 @@ export interface User {
   id: number;
   email: string;
   name?: string;
-  organizations?: Array<{ id?: string;name?: string; slug?: string; domain?: string; selectedStatus?:boolean}>;
+  organizations?: Array<{ id?: string;name?: string; slug?: string; domain?: string; selectedStatus?:boolean; credits?: number; user_role_ids?: number[]}>;
+  personas?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    category_id?: string | null;
+    category_name?: string;
+  }>;
   organization?: string; // Kept for backward compatibility
   organizationId?: string;
   organizationName?: string;
@@ -111,6 +118,22 @@ export interface TokenResponseMessage extends IframeMessage {
     organizationName: string;
     userRoleIds: number[];
   };
+  organizations?: Array<{
+    id?: string;
+    name?: string;
+    slug?: string;
+    domain?: string;
+    selectedStatus?: boolean;
+    credits?: number;
+    user_role_ids?: number[];
+  }>;
+  personas?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    category_id?: string | null;
+    category_name?: string;
+  }>;
   error?: string;
 }
 
@@ -131,6 +154,44 @@ export interface UserStateResponseMessage extends IframeMessage {
     userRoleIds?: number[]; // Array of role IDs (for consistency with JWT token response)
     personas?: any[];
   };
+  error?: string;
+}
+
+export interface UserOrgsRequestMessage extends IframeMessage {
+  type: 'REQUEST_USER_ORGS';
+  origin: string;
+}
+
+export interface UserOrgsResponseMessage extends IframeMessage {
+  type: 'RESPONSE_USER_ORGS';
+  organizations?: Array<{
+    id?: string;
+    name?: string;
+    slug?: string;
+    domain?: string;
+    selectedStatus?: boolean;
+    credits?: number;
+    user_role_ids?: number[];
+  }>;
+  count?: number;
+  error?: string;
+}
+
+export interface UserPersonasRequestMessage extends IframeMessage {
+  type: 'REQUEST_USER_PERSONAS';
+  origin: string;
+}
+
+export interface UserPersonasResponseMessage extends IframeMessage {
+  type: 'RESPONSE_USER_PERSONAS';
+  personas?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    category_id?: string | null;
+    category_name?: string;
+  }>;
+  count?: number;
   error?: string;
 }
 
@@ -218,6 +279,30 @@ export interface HistoryResult extends OperationResult {
   pages?: number;
 }
 
+export interface UserOrgsResult extends OperationResult {
+  organizations?: Array<{
+    id?: string;
+    name?: string;
+    slug?: string;
+    domain?: string;
+    selectedStatus?: boolean;
+    credits?: number;
+    user_role_ids?: number[];
+  }>;
+  count?: number;
+}
+
+export interface UserPersonasResult extends OperationResult {
+  personas?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    category_id?: string | null;
+    category_name?: string;
+  }>;
+  count?: number;
+}
+
 // React Hook Types
 export interface UseCreditSystemReturn {
   isInitialized: boolean;
@@ -237,6 +322,8 @@ export interface UseCreditSystemReturn {
   getPersonas: () => Promise<PersonasResult>;
   getPersonaById: (id: number) => Promise<PersonaResult>;
   requestCurrentUserState: () => Promise<UserStateResult>;
+  requestUserOrganizations: () => Promise<UserOrgsResult>;
+  requestUserPersonas: () => Promise<UserPersonasResult>;
 }
 
 // Persona Types
