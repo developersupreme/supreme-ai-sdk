@@ -7,7 +7,15 @@ export interface User {
   id: number;
   email: string;
   name?: string;
-  organizations?: Array<{ id?: string;name?: string; slug?: string; domain?: string; selectedStatus?:boolean; credits?: number; user_role_ids?: number[]}>;
+  organizations?: Array<{
+    id?: string;
+    name?: string;
+    slug?: string;
+    domain?: string;
+    selectedStatus?: boolean;
+    credits?: number;
+    user_role_ids?: number[]
+  }>;
   personas?: Array<{
     id: string;
     name: string;
@@ -15,11 +23,6 @@ export interface User {
     category_id?: string | null;
     category_name?: string;
   }>;
-  organization?: string; // Kept for backward compatibility
-  organizationId?: string;
-  organizationName?: string;
-  organizationSlug?: string; // Organization slug from parent state
-  organizationDomain?: string; // Organization domain from parent state
   userRoleIds?: number[];
   userId?: string; // User ID from parent state
   userRole?: string; // User role from parent state

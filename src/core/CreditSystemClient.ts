@@ -185,11 +185,9 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`👤 User: ${data.user?.email || 'Unknown'}`);
       this.log(`🔐 Token length: ${data.token?.length || 0} characters`);
 
-      // Extract organization data, organizations array, and personas from response
+      // Extract organizations array, personas, and userRoleIds from response
       const enrichedUser = data.user ? {
         ...data.user,
-        organizationId: data.organization?.organizationId,
-        organizationName: data.organization?.organizationName,
         userRoleIds: data.organization?.userRoleIds,
         organizations: (data as any).organizations || data.user.organizations, // Include organizations array
         personas: (data as any).personas || data.user.personas, // Include personas array
@@ -443,7 +441,9 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     try {
       // Build query parameters with organization_id if available
       const params: Record<string, string> = {};
-      const organizationId = this.state.user?.organizationId;
+      // Get organization ID from organizations array (selected org or first org)
+      const selectedOrg = this.state.user?.organizations?.find(org => org.selectedStatus === true);
+      const organizationId = selectedOrg?.id || this.state.user?.organizations?.[0]?.id;
 
       this.log(`🔍 Organization ID from user state: ${organizationId} (type: ${typeof organizationId})`);
 
@@ -802,13 +802,45 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
           // Save/override user state data in storage (same place as JWT token response)
           const auth = this.storage.get('auth');
           if (auth && auth.user) {
+            // Update organizations array with selected status
+            let updatedOrganizations = auth.user.organizations || [];
+
+            if (data.userState?.orgId) {
+              // Mark all orgs as not selected first
+              updatedOrganizations = updatedOrganizations.map((org: any) => ({
+                ...org,
+                selectedStatus: false
+              }));
+
+              // Find and update the selected org, or add it if not exists
+              const orgIndex = updatedOrganizations.findIndex((org: any) => org.id === data.userState?.orgId);
+              if (orgIndex >= 0) {
+                updatedOrganizations[orgIndex] = {
+                  ...updatedOrganizations[orgIndex],
+                  id: data.userState.orgId,
+                  name: data.userState.orgName,
+                  slug: data.userState.orgSlug,
+                  domain: data.userState.orgDomain,
+                  selectedStatus: true,
+                  user_role_ids: data.userState.userRoleIds || updatedOrganizations[orgIndex].user_role_ids
+                };
+              } else {
+                // Add new organization
+                updatedOrganizations.push({
+                  id: data.userState.orgId,
+                  name: data.userState.orgName,
+                  slug: data.userState.orgSlug,
+                  domain: data.userState.orgDomain,
+                  selectedStatus: true,
+                  user_role_ids: data.userState.userRoleIds
+                });
+              }
+            }
+
             // Update existing user with new state data
             const updatedUser = {
               ...auth.user,
-              organizationId: data.userState.orgId,
-              organizationName: data.userState.orgName,
-              ...(data.userState.orgSlug && { organizationSlug: data.userState.orgSlug }),
-              ...(data.userState.orgDomain && { organizationDomain: data.userState.orgDomain }),
+              organizations: updatedOrganizations,
               userId: data.userState.userId,
               userRole: data.userState.userRole,
               // Also update userRoleIds if provided (for consistency with JWT token response)
@@ -829,11 +861,10 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
             }
 
             this.log('💾 User state saved and overridden in storage');
+            const selectedOrg = updatedOrganizations.find((org: any) => org.selectedStatus);
             this.log('📊 Updated user fields:', {
-              organizationId: updatedUser.organizationId,
-              organizationName: updatedUser.organizationName,
-              organizationSlug: updatedUser.organizationSlug,
-              organizationDomain: updatedUser.organizationDomain,
+              selectedOrganization: selectedOrg ? `${selectedOrg.name} (ID: ${selectedOrg.id})` : 'none',
+              totalOrganizations: updatedOrganizations.length,
               userId: updatedUser.userId,
               userRole: updatedUser.userRole,
               userRoleIds: updatedUser.userRoleIds

@@ -879,8 +879,6 @@ var CreditSystemClient = class extends EventEmitter {
       this.log(`\u{1F510} Token length: ${data.token?.length || 0} characters`);
       const enrichedUser = data.user ? {
         ...data.user,
-        organizationId: data.organization?.organizationId,
-        organizationName: data.organization?.organizationName,
         userRoleIds: data.organization?.userRoleIds,
         organizations: data.organizations || data.user.organizations,
         // Include organizations array
@@ -1080,7 +1078,8 @@ var CreditSystemClient = class extends EventEmitter {
     this.log("\u{1F464} Current user state:", this.state.user);
     try {
       const params = {};
-      const organizationId = this.state.user?.organizationId;
+      const selectedOrg = this.state.user?.organizations?.find((org) => org.selectedStatus === true);
+      const organizationId = selectedOrg?.id || this.state.user?.organizations?.[0]?.id;
       this.log(`\u{1F50D} Organization ID from user state: ${organizationId} (type: ${typeof organizationId})`);
       if (organizationId) {
         params.organization_id = String(organizationId);
@@ -1374,12 +1373,37 @@ var CreditSystemClient = class extends EventEmitter {
           }
           const auth = this.storage.get("auth");
           if (auth && auth.user) {
+            let updatedOrganizations = auth.user.organizations || [];
+            if (data.userState?.orgId) {
+              updatedOrganizations = updatedOrganizations.map((org) => ({
+                ...org,
+                selectedStatus: false
+              }));
+              const orgIndex = updatedOrganizations.findIndex((org) => org.id === data.userState?.orgId);
+              if (orgIndex >= 0) {
+                updatedOrganizations[orgIndex] = {
+                  ...updatedOrganizations[orgIndex],
+                  id: data.userState.orgId,
+                  name: data.userState.orgName,
+                  slug: data.userState.orgSlug,
+                  domain: data.userState.orgDomain,
+                  selectedStatus: true,
+                  user_role_ids: data.userState.userRoleIds || updatedOrganizations[orgIndex].user_role_ids
+                };
+              } else {
+                updatedOrganizations.push({
+                  id: data.userState.orgId,
+                  name: data.userState.orgName,
+                  slug: data.userState.orgSlug,
+                  domain: data.userState.orgDomain,
+                  selectedStatus: true,
+                  user_role_ids: data.userState.userRoleIds
+                });
+              }
+            }
             const updatedUser = {
               ...auth.user,
-              organizationId: data.userState.orgId,
-              organizationName: data.userState.orgName,
-              ...data.userState.orgSlug && { organizationSlug: data.userState.orgSlug },
-              ...data.userState.orgDomain && { organizationDomain: data.userState.orgDomain },
+              organizations: updatedOrganizations,
               userId: data.userState.userId,
               userRole: data.userState.userRole,
               // Also update userRoleIds if provided (for consistency with JWT token response)
@@ -1394,11 +1418,10 @@ var CreditSystemClient = class extends EventEmitter {
               this.state.personas = data.userState.personas;
             }
             this.log("\u{1F4BE} User state saved and overridden in storage");
+            const selectedOrg = updatedOrganizations.find((org) => org.selectedStatus);
             this.log("\u{1F4CA} Updated user fields:", {
-              organizationId: updatedUser.organizationId,
-              organizationName: updatedUser.organizationName,
-              organizationSlug: updatedUser.organizationSlug,
-              organizationDomain: updatedUser.organizationDomain,
+              selectedOrganization: selectedOrg ? `${selectedOrg.name} (ID: ${selectedOrg.id})` : "none",
+              totalOrganizations: updatedOrganizations.length,
               userId: updatedUser.userId,
               userRole: updatedUser.userRole,
               userRoleIds: updatedUser.userRoleIds

@@ -24,11 +24,6 @@ interface User {
         category_id?: string | null;
         category_name?: string;
     }>;
-    organization?: string;
-    organizationId?: string;
-    organizationName?: string;
-    organizationSlug?: string;
-    organizationDomain?: string;
     userRoleIds?: number[];
     userId?: string;
     userRole?: string;
