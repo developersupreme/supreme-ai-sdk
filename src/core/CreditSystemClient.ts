@@ -547,16 +547,50 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'Insufficient credits' };
     }
 
+    // Get user_id from state
+    const userId = this.state.user?.id;
+    if (!userId) {
+      this.log('⚠️ Spend credits blocked: User ID not found');
+      return { success: false, error: 'User ID not found' };
+    }
+
+    // Get organization_id from selected organization
+    const organizations = this.state.user?.organizations as any[];
+    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
+    const organizationId = selectedOrg?.id;
+
+    if (!organizationId) {
+      this.log('⚠️ Spend credits blocked: No selected organization found');
+      return { success: false, error: 'No selected organization found' };
+    }
+
+    // Get user_role_id (optional) - get first role from selected org
+    const userRoleId = selectedOrg?.user_role_ids?.[0];
+
     this.log(`💳 Spending ${amount} credits...`);
+    this.log(`👤 User ID: ${userId}`);
+    this.log(`🏢 Organization ID: ${organizationId} (${selectedOrg.name})`);
+    if (userRoleId) this.log(`🔑 User Role ID: ${userRoleId}`);
     if (description) this.log(`📝 Description: ${description}`);
     if (referenceId) this.log(`🔗 Reference ID: ${referenceId}`);
 
     try {
-      const result = await this.apiClient.post<any>('/spend', {
+      const requestBody: any = {
+        user_id: userId,
+        organization_id: organizationId,
         amount,
         description,
         reference_id: referenceId
-      });
+      };
+
+      // Add user_role_id only if it exists
+      if (userRoleId) {
+        requestBody.user_role_id = userRoleId;
+      }
+
+      this.log('📤 Request payload:', requestBody);
+
+      const result = await this.apiClient.post<any>('/spend', requestBody);
 
       if (result.success && result.data) {
         const previousBalance = this.state.balance;

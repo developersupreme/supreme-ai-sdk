@@ -1159,15 +1159,38 @@ var CreditSystemClient = class extends EventEmitter {
       this.log(`\u26A0\uFE0F Spend credits blocked: Insufficient credits (need ${amount}, have ${this.state.balance})`);
       return { success: false, error: "Insufficient credits" };
     }
+    const userId = this.state.user?.id;
+    if (!userId) {
+      this.log("\u26A0\uFE0F Spend credits blocked: User ID not found");
+      return { success: false, error: "User ID not found" };
+    }
+    const organizations = this.state.user?.organizations;
+    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
+    const organizationId = selectedOrg?.id;
+    if (!organizationId) {
+      this.log("\u26A0\uFE0F Spend credits blocked: No selected organization found");
+      return { success: false, error: "No selected organization found" };
+    }
+    const userRoleId = selectedOrg?.user_role_ids?.[0];
     this.log(`\u{1F4B3} Spending ${amount} credits...`);
+    this.log(`\u{1F464} User ID: ${userId}`);
+    this.log(`\u{1F3E2} Organization ID: ${organizationId} (${selectedOrg.name})`);
+    if (userRoleId) this.log(`\u{1F511} User Role ID: ${userRoleId}`);
     if (description) this.log(`\u{1F4DD} Description: ${description}`);
     if (referenceId) this.log(`\u{1F517} Reference ID: ${referenceId}`);
     try {
-      const result = await this.apiClient.post("/spend", {
+      const requestBody = {
+        user_id: userId,
+        organization_id: organizationId,
         amount,
         description,
         reference_id: referenceId
-      });
+      };
+      if (userRoleId) {
+        requestBody.user_role_id = userRoleId;
+      }
+      this.log("\u{1F4E4} Request payload:", requestBody);
+      const result = await this.apiClient.post("/spend", requestBody);
       if (result.success && result.data) {
         const previousBalance = this.state.balance;
         this.state.balance = result.data.new_balance;
