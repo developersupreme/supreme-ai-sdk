@@ -401,6 +401,7 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     /**
      * Read personas from cookie
      */
+    private getOrganizationIdFromCookie;
     private getPersonasFromCookie;
     /**
      * Load personas for authenticated user

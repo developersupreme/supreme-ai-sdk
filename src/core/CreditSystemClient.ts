@@ -441,17 +441,18 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     try {
       // Build query parameters with organization_id if available
       const params: Record<string, string> = {};
-      // Get organization ID from organizations array (selected org or first org)
-      const selectedOrg = this.state.user?.organizations?.find(org => org.selectedStatus === true);
-      const organizationId = selectedOrg?.id || this.state.user?.organizations?.[0]?.id;
+      // Get organization_id from selected organization (same as spendCredits logic)
+      const organizations = this.state.user?.organizations as any[];
+      const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
+      const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
 
-      this.log(`🔍 Organization ID from user state: ${organizationId} (type: ${typeof organizationId})`);
+      this.log(`🔍 Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
 
       if (organizationId) {
         params.organization_id = String(organizationId);
         this.log(`🏢 Including organization_id in balance request: ${params.organization_id}`);
       } else {
-        this.log('⚠️ WARNING: No organization_id in user state!');
+        this.log('⚠️ WARNING: No organization_id available from state or cookie!');
       }
 
       this.log(`📤 Balance request params:`, params);
@@ -727,6 +728,21 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   /**
    * Read personas from cookie
    */
+  private getOrganizationIdFromCookie(): string | null {
+    try {
+      const cookies = document.cookie.split(';');
+      const orgCookie = cookies.find(c => c.trim().startsWith('user-selected-org-id='));
+      if (orgCookie) {
+        const value = orgCookie.split('=')[1];
+        this.log(`🍪 Found organization ID in cookie: ${value}`);
+        return value;
+      }
+    } catch (error: any) {
+      this.log(`⚠️ Error reading organization ID from cookie: ${error.message}`);
+    }
+    return null;
+  }
+
   private getPersonasFromCookie(): Persona[] {
     try {
       const cookies = document.cookie.split(';');

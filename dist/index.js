@@ -1078,14 +1078,15 @@ var CreditSystemClient = class extends EventEmitter {
     this.log("\u{1F464} Current user state:", this.state.user);
     try {
       const params = {};
-      const selectedOrg = this.state.user?.organizations?.find((org) => org.selectedStatus === true);
-      const organizationId = selectedOrg?.id || this.state.user?.organizations?.[0]?.id;
-      this.log(`\u{1F50D} Organization ID from user state: ${organizationId} (type: ${typeof organizationId})`);
+      const organizations = this.state.user?.organizations;
+      const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
+      const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+      this.log(`\u{1F50D} Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
       if (organizationId) {
         params.organization_id = String(organizationId);
         this.log(`\u{1F3E2} Including organization_id in balance request: ${params.organization_id}`);
       } else {
-        this.log("\u26A0\uFE0F WARNING: No organization_id in user state!");
+        this.log("\u26A0\uFE0F WARNING: No organization_id available from state or cookie!");
       }
       this.log(`\u{1F4E4} Balance request params:`, params);
       const result = await this.apiClient.get("/balance", params);
@@ -1308,6 +1309,20 @@ var CreditSystemClient = class extends EventEmitter {
   /**
    * Read personas from cookie
    */
+  getOrganizationIdFromCookie() {
+    try {
+      const cookies = document.cookie.split(";");
+      const orgCookie = cookies.find((c) => c.trim().startsWith("user-selected-org-id="));
+      if (orgCookie) {
+        const value = orgCookie.split("=")[1];
+        this.log(`\u{1F36A} Found organization ID in cookie: ${value}`);
+        return value;
+      }
+    } catch (error) {
+      this.log(`\u26A0\uFE0F Error reading organization ID from cookie: ${error.message}`);
+    }
+    return null;
+  }
   getPersonasFromCookie() {
     try {
       const cookies = document.cookie.split(";");
