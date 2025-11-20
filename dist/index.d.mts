@@ -516,6 +516,23 @@ declare function CreditSystemProvider({ children, config }: CreditSystemProvider
 declare function useCreditContext(): UseCreditSystemReturn;
 
 /**
+ * React Hook for switching selected organization
+ * Updates organization status everywhere it's stored:
+ * - User state in storage
+ * - Cookie for API compatibility
+ * - Triggers balance refresh for new organization
+ */
+interface SwitchOrgResult {
+    success: boolean;
+    error?: string;
+    previousOrgId?: string;
+    newOrgId?: string;
+}
+declare function useSwitchOrganization(): {
+    switchOrganization: (orgId: string) => Promise<SwitchOrgResult>;
+};
+
+/**
  * ParentIntegrator - Helper for parent pages to integrate with iframe credit system
  */
 
@@ -632,4 +649,4 @@ declare class ParentIntegrator {
  * @packageDocumentation
  */
 
-export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type SDKState, type SpendResponse, type SpendResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, type UserStateRequestMessage, type UserStateResponseMessage, type UserStateResult, CreditSystemClient as default, useCreditContext, useCreditSystem };
+export { type AddCreditsResponse, type AddResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type SDKState, type SpendResponse, type SpendResult, type SwitchOrgResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, type UserStateRequestMessage, type UserStateResponseMessage, type UserStateResult, CreditSystemClient as default, useCreditContext, useCreditSystem, useSwitchOrganization };

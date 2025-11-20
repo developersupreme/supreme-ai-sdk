@@ -1980,6 +1980,105 @@ function useCreditContext() {
   return context;
 }
 
+// src/react/useSwitchOrganization.tsx
+import { useCallback as useCallback2 } from "react";
+function useSwitchOrganization() {
+  const creditSystem = useCreditContext();
+  const switchOrganization = useCallback2(
+    async (orgId) => {
+      try {
+        if (!creditSystem.isAuthenticated || !creditSystem.user) {
+          return {
+            success: false,
+            error: "User not authenticated"
+          };
+        }
+        const organizations = creditSystem.user.organizations;
+        if (!organizations || organizations.length === 0) {
+          return {
+            success: false,
+            error: "No organizations found for user"
+          };
+        }
+        const targetOrg = organizations.find((org) => org.id === orgId);
+        if (!targetOrg) {
+          return {
+            success: false,
+            error: `Organization with ID ${orgId} not found`
+          };
+        }
+        const previousOrg = organizations.find((org) => org.selectedStatus === true);
+        const previousOrgId = previousOrg?.id;
+        if (previousOrgId === orgId) {
+          return {
+            success: true,
+            previousOrgId: orgId,
+            newOrgId: orgId,
+            error: "Organization already selected"
+          };
+        }
+        const updatedOrganizations = organizations.map((org) => ({
+          ...org,
+          selectedStatus: org.id === orgId
+        }));
+        const storagePrefix = "creditSystem_";
+        const authKey = storagePrefix + "auth";
+        let authData;
+        try {
+          const storedAuth = sessionStorage.getItem(authKey);
+          authData = storedAuth ? JSON.parse(storedAuth) : null;
+        } catch (error) {
+          return {
+            success: false,
+            error: "Failed to read authentication data from storage"
+          };
+        }
+        if (!authData || !authData.user) {
+          return {
+            success: false,
+            error: "Authentication data not found in storage"
+          };
+        }
+        const updatedUser = {
+          ...authData.user,
+          organizations: updatedOrganizations
+        };
+        try {
+          sessionStorage.setItem(authKey, JSON.stringify({
+            ...authData,
+            user: updatedUser
+          }));
+        } catch (error) {
+          return {
+            success: false,
+            error: "Failed to update storage with new organization selection"
+          };
+        }
+        const expires = /* @__PURE__ */ new Date();
+        expires.setDate(expires.getDate() + 30);
+        document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+        if (creditSystem.checkBalance) {
+          await creditSystem.checkBalance();
+        }
+        return {
+          success: true,
+          previousOrgId,
+          newOrgId: orgId
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error.message || "Failed to switch organization"
+        };
+      }
+    },
+    [creditSystem]
+  );
+  return {
+    switchOrganization
+  };
+}
+
 // src/parent/ParentIntegrator.ts
 var ParentIntegrator = class {
   constructor(config) {
@@ -2288,5 +2387,6 @@ export {
   PersonasClient,
   index_default as default,
   useCreditContext,
-  useCreditSystem
+  useCreditSystem,
+  useSwitchOrganization
 };
