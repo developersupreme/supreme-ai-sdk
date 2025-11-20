@@ -14,6 +14,8 @@ export type { PersonasClientConfig } from './core/PersonasClient';
 // React exports
 export { useCreditSystem } from './react/useCreditSystem';
 export { CreditSystemProvider, useCreditContext } from './react/CreditSystemProvider';
+export { useSwitchOrganization } from './react/useSwitchOrganization';
+export type { SwitchOrgResult } from './react/useSwitchOrganization';
 
 // Parent integration exports
 export { ParentIntegrator } from './parent/ParentIntegrator';
