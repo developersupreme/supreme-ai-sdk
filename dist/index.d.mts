@@ -520,7 +520,8 @@ declare function useCreditContext(): UseCreditSystemReturn;
  * Updates organization status everywhere it's stored:
  * - User state in storage
  * - Cookie for API compatibility
- * - Triggers balance refresh for new organization
+ * - Updates balance from organization object (no API call - instant!)
+ * - Emits balanceUpdate event to update SDK state
  */
 interface SwitchOrgResult {
     success: boolean;

@@ -2090,8 +2090,8 @@ function useSwitchOrganization() {
         const expires = /* @__PURE__ */ new Date();
         expires.setDate(expires.getDate() + 30);
         document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
-        if (creditSystem.checkBalance) {
-          await creditSystem.checkBalance();
+        if (creditSystem.user) {
+          creditSystem.user.organizations = updatedOrganizations;
         }
         return {
           success: true,
