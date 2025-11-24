@@ -648,12 +648,50 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'Invalid amount' };
     }
 
+    // Get user_id from state
+    const userId = this.state.user?.id;
+    if (!userId) {
+      this.log('⚠️ Add credits blocked: User ID not found');
+      return { success: false, error: 'User ID not found' };
+    }
+
+    // Get organization_id from selected organization
+    const organizations = this.state.user?.organizations as any[];
+    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
+    const organizationId = selectedOrg?.id;
+
+    if (!organizationId) {
+      this.log('⚠️ Add credits blocked: No selected organization found');
+      return { success: false, error: 'No selected organization found' };
+    }
+
+    // Get user_role_id (optional) - get first role from selected org
+    const userRoleId = selectedOrg?.user_role_ids?.[0];
+
+    this.log(`➕ Adding ${amount} credits...`);
+    this.log(`👤 User ID: ${userId}`);
+    this.log(`🏢 Organization ID: ${organizationId} (${selectedOrg.name})`);
+    if (userRoleId) this.log(`🔑 User Role ID: ${userRoleId}`);
+    if (description) this.log(`📝 Description: ${description}`);
+    this.log(`🏷️ Type: ${type}`);
+
     try {
-      const result = await this.apiClient.post<any>('/add', {
+      const requestBody: any = {
+        user_id: userId,
+        organization_id: organizationId,
         amount,
         type,
         description
-      });
+      };
+
+      // Add user_role_id only if it exists
+      if (userRoleId) {
+        requestBody.user_role_id = userRoleId;
+      }
+
+      this.log('📤 Request payload:', requestBody);
+
+      const result = await this.apiClient.post<any>('/add', requestBody);
 
       if (result.success && result.data) {
         const previousBalance = this.state.balance;
