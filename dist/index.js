@@ -1169,6 +1169,7 @@ var CreditSystemClient = class extends EventEmitter {
     const organizations = this.state.user?.organizations;
     const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
     const organizationId = selectedOrg?.id;
+    if (this.config.debug) this.log("organizationId", organizationId);
     if (!organizationId) {
       this.log("\u26A0\uFE0F Spend credits blocked: No selected organization found");
       return { success: false, error: "No selected organization found" };
