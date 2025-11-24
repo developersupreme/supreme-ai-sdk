@@ -1279,20 +1279,45 @@ var CreditSystemClient = class extends EventEmitter {
     if (!this.state.isAuthenticated) {
       return { success: false, error: "Not authenticated" };
     }
+    const organizations = this.state.user?.organizations;
+    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
+    const organizationId = selectedOrg?.id;
+    if (!organizationId) {
+      this.log("\u26A0\uFE0F Get history blocked: No selected organization found");
+      return { success: false, error: "No organization selected" };
+    }
+    const offset = (page - 1) * limit;
+    this.log(`\u{1F4DC} Fetching transaction history (page ${page}, limit ${limit}, offset ${offset})...`);
     try {
-      const result = await this.apiClient.get(`/history?page=${page}&limit=${limit}`);
+      const result = await this.apiClient.get(`/history?organization_id=${organizationId}&limit=${limit}&offset=${offset}`);
       if (result.success && result.data) {
+        const pagination = result.data.pagination || {};
+        const total = pagination.total || 0;
+        const totalPages = Math.ceil(total / limit);
+        const transactions = (result.data.transactions || []).map((tx) => ({
+          id: tx.id,
+          type: tx.type,
+          amount: tx.amount,
+          description: tx.description || "",
+          reference_id: tx.reference_id,
+          created_at: tx.created_at,
+          balance_after: tx.balance_after || 0,
+          // Default to 0 if not provided by API
+          user_id: tx.user_id
+        }));
+        this.log(`\u2705 Loaded ${transactions.length} transactions (total: ${total})`);
         return {
           success: true,
-          transactions: result.data.transactions,
-          total: result.data.total,
-          page: result.data.current_page,
-          pages: result.data.total_pages
+          transactions,
+          total,
+          page,
+          pages: totalPages
         };
       } else {
         return { success: false, error: result.message || "Failed to get history" };
       }
     } catch (error) {
+      this.log(`\u274C Failed to get history: ${error.message}`);
       this.emit("error", { type: "history", error: error.message });
       return { success: false, error: error.message };
     }
