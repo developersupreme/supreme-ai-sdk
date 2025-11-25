@@ -548,6 +548,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'Insufficient credits' };
     }
 
+    if(this.config.debug)this.log('👤 Current user state:', this.state.user);
+
     // Get user_id from state
     const userId = this.state.user?.id;
     if (!userId) {

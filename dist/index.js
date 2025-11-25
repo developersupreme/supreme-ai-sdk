@@ -1161,6 +1161,7 @@ var CreditSystemClient = class extends EventEmitter {
       this.log(`\u26A0\uFE0F Spend credits blocked: Insufficient credits (need ${amount}, have ${this.state.balance})`);
       return { success: false, error: "Insufficient credits" };
     }
+    if (this.config.debug) this.log("\u{1F464} Current user state:", this.state.user);
     const userId = this.state.user?.id;
     if (!userId) {
       this.log("\u26A0\uFE0F Spend credits blocked: User ID not found");
