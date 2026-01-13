@@ -12,6 +12,7 @@ import type {
   SpendResult,
   AddResult,
   HistoryResult,
+  AgentsResult,
   UseCreditSystemReturn,
   Persona,
   PersonasResult,
@@ -198,6 +199,15 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     return await clientRef.current.getHistory(page, limit);
   }, []);
 
+  // Get AI agents
+  const getAgents = useCallback(async (all?: boolean): Promise<AgentsResult> => {
+    if (!clientRef.current) {
+      return { success: false, error: 'Client not initialized' };
+    }
+
+    return await clientRef.current.getAgents(all);
+  }, []);
+
   // Get personas
   const getPersonas = useCallback(async (organizationId?: string | number, roleId?: string | number): Promise<PersonasResult> => {
     if (!clientRef.current) {
@@ -258,6 +268,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     spendCredits,
     addCredits,
     getHistory,
+    getAgents,
     getPersonas,
     getPersonaById,
     requestCurrentUserState,

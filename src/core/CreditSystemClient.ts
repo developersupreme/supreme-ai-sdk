@@ -23,7 +23,8 @@ import type {
   PersonaResult,
   Persona,
   UserStateResponseMessage,
-  UserStateResult
+  UserStateResult,
+  AgentsResult
 } from '../types';
 
 export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
@@ -794,6 +795,96 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`❌ Failed to get history: ${error.message}`);
       this.emit('error', { type: 'history', error: error.message });
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get AI agents
+   * @param all - If true, fetches all agents for the organization. If false/undefined, fetches agents filtered by user's role IDs.
+   */
+  async getAgents(all: boolean = false): Promise<AgentsResult> {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Get organization_id from selected organization or cookie (for standalone mode)
+    const organizations = this.state.user?.organizations as any[];
+    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
+    const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+
+    this.log(`🔍 Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
+
+    if (!organizationId) {
+      this.log('⚠️ Get agents blocked: No selected organization found');
+      return { success: false, error: 'No organization selected' };
+    }
+
+    // Build query parameters
+    let queryParams = `organization_id=${organizationId}`;
+
+    if (all) {
+      // Fetch all agents for the organization
+      queryParams += '&all=true';
+      this.log(`🤖 Fetching all AI agents for organization ${organizationId}...`);
+    } else {
+      // Fetch agents filtered by user's role IDs
+      // Try multiple sources: selectedOrg.user_role_ids, or user.userRoleIds (from parent state)
+      const roleIds = selectedOrg?.user_role_ids || this.state.user?.userRoleIds;
+      if (!roleIds || roleIds.length === 0) {
+        this.log('⚠️ Get agents blocked: No role IDs found for user in selected organization');
+        return { success: false, error: 'No role IDs found for user' };
+      }
+      queryParams += `&role_ids=${roleIds.join(',')}`;
+      this.log(`🤖 Fetching AI agents for organization ${organizationId} with role_ids: ${roleIds.join(',')}...`);
+    }
+
+    try {
+      const result = await this.apiClient.get<any>(`/ai-agents?${queryParams}`);
+
+      if (result.success && result.data) {
+        // Handle various response structures
+        let agents: any[] = [];
+
+        if (Array.isArray(result.data)) {
+          agents = result.data;
+        } else if (result.data.agents) {
+          // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "15": [...] } }
+          if (all && Array.isArray(result.data.agents.all)) {
+            // For all=true, agents are under "all" key
+            agents = result.data.agents.all;
+          } else if (Array.isArray(result.data.agents)) {
+            // Direct array: { agents: [...] }
+            agents = result.data.agents;
+          } else if (typeof result.data.agents === 'object') {
+            // For role-specific, agents are under role ID keys: { agents: { "15": [...], "16": [...] } }
+            // Flatten all arrays from the object
+            const agentObj = result.data.agents;
+            Object.keys(agentObj).forEach(key => {
+              if (Array.isArray(agentObj[key])) {
+                agents = agents.concat(agentObj[key]);
+              }
+            });
+          }
+        } else if (Array.isArray(result.data.data)) {
+          agents = result.data.data;
+        }
+
+        const total = result.data.total || agents.length;
+
+        this.log(`✅ Loaded ${agents.length} AI agents (total: ${total})`);
+
+        return {
+          success: true,
+          agents,
+          total
+        };
+      } else {
+        return { success: false, error: result.message || 'Failed to get agents', agents: [] };
+      }
+    } catch (error: any) {
+      this.log(`❌ Failed to get agents: ${error.message}`);
+      this.emit('error', { type: 'agents', error: error.message });
+      return { success: false, error: error.message, agents: [] };
     }
   }
 

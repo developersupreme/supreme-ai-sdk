@@ -271,6 +271,7 @@ interface UseCreditSystemReturn {
     spendCredits: (amount: number, description?: string, referenceId?: string) => Promise<SpendResult>;
     addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
     getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
+    getAgents: (all?: boolean) => Promise<AgentsResult>;
     getPersonas: () => Promise<PersonasResult>;
     getPersonaById: (id: number) => Promise<PersonaResult>;
     requestCurrentUserState: () => Promise<UserStateResult>;
@@ -303,6 +304,19 @@ interface UserStateResult extends OperationResult {
         userRoleIds?: number[];
         personas?: any[];
     };
+}
+interface Agent {
+    id: number;
+    name: string;
+    description?: string;
+    status?: string;
+    created_at?: string;
+    updated_at?: string;
+    [key: string]: any;
+}
+interface AgentsResult extends OperationResult {
+    agents?: Agent[];
+    total?: number;
 }
 
 /**
@@ -398,6 +412,11 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      * Get transaction history
      */
     getHistory(page?: number, limit?: number): Promise<HistoryResult>;
+    /**
+     * Get AI agents
+     * @param all - If true, fetches all agents for the organization. If false/undefined, fetches agents filtered by user's role IDs.
+     */
+    getAgents(all?: boolean): Promise<AgentsResult>;
     /**
      * Read personas from cookie
      */

@@ -1324,6 +1324,73 @@ var CreditSystemClient = class extends EventEmitter {
       return { success: false, error: error.message };
     }
   }
+  /**
+   * Get AI agents
+   * @param all - If true, fetches all agents for the organization. If false/undefined, fetches agents filtered by user's role IDs.
+   */
+  async getAgents(all = false) {
+    if (!this.state.isAuthenticated) {
+      return { success: false, error: "Not authenticated" };
+    }
+    const organizations = this.state.user?.organizations;
+    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
+    const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+    this.log(`\u{1F50D} Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
+    if (!organizationId) {
+      this.log("\u26A0\uFE0F Get agents blocked: No selected organization found");
+      return { success: false, error: "No organization selected" };
+    }
+    let queryParams = `organization_id=${organizationId}`;
+    if (all) {
+      queryParams += "&all=true";
+      this.log(`\u{1F916} Fetching all AI agents for organization ${organizationId}...`);
+    } else {
+      const roleIds = selectedOrg?.user_role_ids || this.state.user?.userRoleIds;
+      if (!roleIds || roleIds.length === 0) {
+        this.log("\u26A0\uFE0F Get agents blocked: No role IDs found for user in selected organization");
+        return { success: false, error: "No role IDs found for user" };
+      }
+      queryParams += `&role_ids=${roleIds.join(",")}`;
+      this.log(`\u{1F916} Fetching AI agents for organization ${organizationId} with role_ids: ${roleIds.join(",")}...`);
+    }
+    try {
+      const result = await this.apiClient.get(`/ai-agents?${queryParams}`);
+      if (result.success && result.data) {
+        let agents = [];
+        if (Array.isArray(result.data)) {
+          agents = result.data;
+        } else if (result.data.agents) {
+          if (all && Array.isArray(result.data.agents.all)) {
+            agents = result.data.agents.all;
+          } else if (Array.isArray(result.data.agents)) {
+            agents = result.data.agents;
+          } else if (typeof result.data.agents === "object") {
+            const agentObj = result.data.agents;
+            Object.keys(agentObj).forEach((key) => {
+              if (Array.isArray(agentObj[key])) {
+                agents = agents.concat(agentObj[key]);
+              }
+            });
+          }
+        } else if (Array.isArray(result.data.data)) {
+          agents = result.data.data;
+        }
+        const total = result.data.total || agents.length;
+        this.log(`\u2705 Loaded ${agents.length} AI agents (total: ${total})`);
+        return {
+          success: true,
+          agents,
+          total
+        };
+      } else {
+        return { success: false, error: result.message || "Failed to get agents", agents: [] };
+      }
+    } catch (error) {
+      this.log(`\u274C Failed to get agents: ${error.message}`);
+      this.emit("error", { type: "agents", error: error.message });
+      return { success: false, error: error.message, agents: [] };
+    }
+  }
   // ===================================================================
   // PERSONAS METHODS
   // ===================================================================
@@ -1964,6 +2031,12 @@ function useCreditSystem(config) {
     }
     return await clientRef.current.getHistory(page, limit);
   }, []);
+  const getAgents = useCallback(async (all) => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.getAgents(all);
+  }, []);
   const getPersonas = useCallback(async (organizationId, roleId) => {
     if (!clientRef.current) {
       return { success: false, error: "Client not initialized" };
@@ -2009,6 +2082,7 @@ function useCreditSystem(config) {
     spendCredits,
     addCredits,
     getHistory,
+    getAgents,
     getPersonas,
     getPersonaById,
     requestCurrentUserState,

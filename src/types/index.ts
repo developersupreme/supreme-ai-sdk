@@ -322,6 +322,7 @@ export interface UseCreditSystemReturn {
   spendCredits: (amount: number, description?: string, referenceId?: string) => Promise<SpendResult>;
   addCredits: (amount: number, type?: string, description?: string) => Promise<AddResult>;
   getHistory: (page?: number, limit?: number) => Promise<HistoryResult>;
+  getAgents: (all?: boolean) => Promise<AgentsResult>;
   getPersonas: () => Promise<PersonasResult>;
   getPersonaById: (id: number) => Promise<PersonaResult>;
   requestCurrentUserState: () => Promise<UserStateResult>;
@@ -360,4 +361,20 @@ export interface UserStateResult extends OperationResult {
     userRoleIds?: number[];
     personas?: any[];
   };
+}
+
+// AI Agent Types
+export interface Agent {
+  id: number;
+  name: string;
+  description?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+export interface AgentsResult extends OperationResult {
+  agents?: Agent[];
+  total?: number;
 }
