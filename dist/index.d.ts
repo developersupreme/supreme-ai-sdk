@@ -66,6 +66,7 @@ interface SDKFeatures {
 }
 interface CreditSDKConfig {
     apiBaseUrl?: string;
+    agentsApiBaseUrl?: string;
     authUrl?: string;
     parentTimeout?: number;
     tokenRefreshInterval?: number;
@@ -370,6 +371,7 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     private messageBridge;
     private authManager;
     private apiClient;
+    private agentsApiClient;
     private personasClient;
     private tokenTimer?;
     private balanceTimer?;

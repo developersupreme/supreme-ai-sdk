@@ -74,6 +74,7 @@ export interface SDKFeatures {
 
 export interface CreditSDKConfig {
   apiBaseUrl?: string;
+  agentsApiBaseUrl?: string;
   authUrl?: string;
   parentTimeout?: number;
   tokenRefreshInterval?: number;

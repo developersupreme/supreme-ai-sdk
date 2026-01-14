@@ -763,6 +763,7 @@ var CreditSystemClient = class extends EventEmitter {
     this.debug = config.debug || false;
     this.config = {
       apiBaseUrl: config.apiBaseUrl || "/api/secure-credits/jwt",
+      agentsApiBaseUrl: config.agentsApiBaseUrl || "/api/ai-agents/jwt",
       authUrl: config.authUrl || "/api/jwt",
       parentTimeout: config.parentTimeout || 3e3,
       tokenRefreshInterval: config.tokenRefreshInterval || 6e5,
@@ -798,6 +799,7 @@ var CreditSystemClient = class extends EventEmitter {
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
     this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
     this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);
+    this.agentsApiClient = new ApiClient(this.config.agentsApiBaseUrl, () => this.getAuthToken(), this.config.debug);
     const personasBaseUrl = this.config.apiBaseUrl.replace("/secure-credits/jwt", "");
     this.personasClient = new PersonasClient({
       apiBaseUrl: personasBaseUrl,
@@ -1387,7 +1389,7 @@ var CreditSystemClient = class extends EventEmitter {
       this.log(`\u{1F916} Fetching AI agents for organization ${organizationId} with role_ids: ${roleIds.join(",")}...`);
     }
     try {
-      const result = await this.apiClient.get(`/ai-agents?${queryParams}`);
+      const result = await this.agentsApiClient.get(`?${queryParams}`);
       if (result.success && result.data) {
         let agents = [];
         let roleGrouped = {};

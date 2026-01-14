@@ -34,6 +34,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   private messageBridge: MessageBridge;
   private authManager: AuthManager;
   private apiClient: ApiClient;
+  private agentsApiClient: ApiClient;
   private personasClient: PersonasClient;
   private tokenTimer?: NodeJS.Timeout;
   private balanceTimer?: NodeJS.Timeout;
@@ -48,6 +49,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     // Configuration with defaults
     this.config = {
       apiBaseUrl: config.apiBaseUrl || '/api/secure-credits/jwt',
+      agentsApiBaseUrl: config.agentsApiBaseUrl || '/api/ai-agents/jwt',
       authUrl: config.authUrl || '/api/jwt',
       parentTimeout: config.parentTimeout || 3000,
       tokenRefreshInterval: config.tokenRefreshInterval || 600000, // 10 minutes
@@ -81,6 +83,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
     this.authManager = new AuthManager(this.config.authUrl, this.config.debug);
     this.apiClient = new ApiClient(this.config.apiBaseUrl, () => this.getAuthToken(), this.config.debug);
+    this.agentsApiClient = new ApiClient(this.config.agentsApiBaseUrl, () => this.getAuthToken(), this.config.debug);
 
     // Initialize PersonasClient
     const personasBaseUrl = this.config.apiBaseUrl.replace('/secure-credits/jwt', '');
@@ -839,7 +842,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     try {
-      const result = await this.apiClient.get<any>(`/ai-agents?${queryParams}`);
+      const result = await this.agentsApiClient.get<any>(`?${queryParams}`);
 
       if (result.success && result.data) {
         // Handle various response structures
