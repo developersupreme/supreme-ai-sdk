@@ -1357,6 +1357,7 @@ var CreditSystemClient = class extends EventEmitter {
       const result = await this.apiClient.get(`/ai-agents?${queryParams}`);
       if (result.success && result.data) {
         let agents = [];
+        let roleGrouped = {};
         if (Array.isArray(result.data)) {
           agents = result.data;
         } else if (result.data.agents) {
@@ -1367,8 +1368,18 @@ var CreditSystemClient = class extends EventEmitter {
           } else if (typeof result.data.agents === "object") {
             const agentObj = result.data.agents;
             Object.keys(agentObj).forEach((key) => {
-              if (Array.isArray(agentObj[key])) {
-                agents = agents.concat(agentObj[key]);
+              if (key === "all") return;
+              const roleData = agentObj[key];
+              if (roleData && typeof roleData === "object") {
+                if (roleData.role_name && Array.isArray(roleData.agents)) {
+                  roleGrouped[key] = {
+                    role_name: roleData.role_name,
+                    agents: roleData.agents
+                  };
+                  agents = agents.concat(roleData.agents);
+                } else if (Array.isArray(roleData)) {
+                  agents = agents.concat(roleData);
+                }
               }
             });
           }
@@ -1376,10 +1387,16 @@ var CreditSystemClient = class extends EventEmitter {
           agents = result.data.data;
         }
         const total = result.data.total || agents.length;
-        this.log(`\u2705 Loaded ${agents.length} AI agents (total: ${total})`);
+        const roleCount = Object.keys(roleGrouped).length;
+        if (roleCount > 0) {
+          this.log(`\u2705 Loaded ${agents.length} AI agents across ${roleCount} roles (total: ${total})`);
+        } else {
+          this.log(`\u2705 Loaded ${agents.length} AI agents (total: ${total})`);
+        }
         return {
           success: true,
           agents,
+          roleGrouped: roleCount > 0 ? roleGrouped : void 0,
           total
         };
       } else {

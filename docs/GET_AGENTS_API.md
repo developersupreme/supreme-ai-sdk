@@ -2,99 +2,143 @@
 
 Fetch AI agents for the current organization.
 
-## Method Signature
-
-```typescript
-getAgents(all?: boolean): Promise<AgentsResult>
-```
-
-## Parameters
+## Parameter
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `all` | boolean | `false` | If `true`, returns all agents of the organization regardless of roles. If `false`, returns agents filtered by user's role IDs. |
-
-## Response
-
-```typescript
-interface AgentsResult {
-  success: boolean;
-  agents?: Agent[];
-  total?: number;
-  error?: string;
-}
-
-interface Agent {
-  id: number;
-  name: string;
-  description?: string;
-  assistant_id?: string;
-  short_desc?: string;
-  status?: string;
-}
-```
-
----
+| `all` | boolean | `false` | `true` = all agents in org, `false` = only agents for user's roles |
 
 ## Usage
 
-### Embedded Mode (iframe)
-
 ```typescript
-import { useCreditSystem } from '@supreme-ai/si-sdk';
+import { useCreditSystem, type Agent } from "@supreme-ai/si-sdk";
 
 function MyComponent() {
   const { getAgents } = useCreditSystem({
-    apiBaseUrl: 'https://api.example.com/api/secure-credits/jwt',
-    debug: true
+    apiBaseUrl: "https://app.supremegroup.ai/api/secure-credits/jwt",
+    authUrl: "https://app.supremegroup.ai/api/jwt",
   });
 
-  // Get all agents for the organization
-  const fetchAllAgents = async () => {
+  // Get ALL agents in the organization
+  const loadAllAgents = async () => {
     const result = await getAgents(true);
+
     if (result.success) {
-      console.log('All agents:', result.agents);
+      console.log("All agents:", result.agents);
+      console.log("Total:", result.total);
+
+      result.agents?.forEach((agent) => {
+        console.log(`- ${agent.name} (${agent.assistant_id})`);
+      });
+    } else {
+      console.error("Error:", result.error);
     }
   };
 
-  // Get agents filtered by user's role IDs
-  const fetchMyAgents = async () => {
+  // Get only agents assigned to user's roles
+  const loadMyAgents = async () => {
     const result = await getAgents(false);
+
     if (result.success) {
-      console.log('My agents:', result.agents);
+      console.log("My agents:", result.agents);
+      console.log("Total:", result.total);
+
+      // Agents grouped by role (only available when all=false)
+      if (result.roleGrouped) {
+        Object.entries(result.roleGrouped).forEach(([roleId, data]) => {
+          console.log(`Role: ${data.role_name} (ID: ${roleId})`);
+          data.agents.forEach((agent) => {
+            console.log(`  - ${agent.name}`);
+          });
+        });
+      }
+    } else {
+      console.error("Error:", result.error);
     }
   };
 }
 ```
 
-### Standalone Mode
+## Response when `getAgents(true)`
 
 ```typescript
-import { CreditSystemClient } from '@supreme-ai/si-sdk';
-
-const client = new CreditSystemClient({
-  apiBaseUrl: 'https://api.example.com/api/secure-credits/jwt',
-  authUrl: 'https://api.example.com/api/jwt',
-  mode: 'standalone',
-  debug: true
-});
-
-// After authentication...
-
-// Get all agents
-const allResult = await client.getAgents(true);
-// GET /ai-agents?organization_id=1&all=true
-
-// Get role-filtered agents
-const filteredResult = await client.getAgents(false);
-// GET /ai-agents?organization_id=1&role_ids=15,16
+{
+  success: true,
+  agents: [
+    {
+      id: 14,
+      assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+      name: "OpenKAI MLR Agent",
+      description: "OpenKAI MLR Agent",
+      short_desc: null
+    },
+    {
+      id: 18,
+      assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
+      name: "PHC Main Agent",
+      description: null,
+      short_desc: "Custom AI supporting PHCbi projects..."
+    }
+  ],
+  total: 2
+}
 ```
 
----
+## Response when `getAgents(false)`
 
-## API Endpoints
-
-| Call | Endpoint |
-|------|----------|
-| `getAgents(true)` | `/ai-agents?organization_id={orgId}&all=true` |
-| `getAgents(false)` | `/ai-agents?organization_id={orgId}&role_ids={roleIds}` |
+```typescript
+{
+  success: true,
+  agents: [
+    {
+      id: 18,
+      assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
+      name: "PHC Main Agent",
+      description: null,
+      short_desc: "Custom AI supporting PHCbi projects...",
+      is_default: false,
+      grant_type: "organization"
+    },
+    {
+      id: 14,
+      assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+      name: "OpenKAI MLR Agent",
+      description: "OpenKAI MLR Agent",
+      short_desc: null,
+      is_default: false,
+      grant_type: "role"
+    }
+  ],
+  roleGrouped: {
+    "2": {
+      role_name: "CEO",
+      agents: [
+        {
+          id: 18,
+          assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
+          name: "PHC Main Agent",
+          description: null,
+          short_desc: "Custom AI supporting PHCbi projects...",
+          is_default: false,
+          grant_type: "organization"
+        }
+      ]
+    },
+    "13": {
+      role_name: "Developer",
+      agents: [
+        {
+          id: 14,
+          assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+          name: "OpenKAI MLR Agent",
+          description: "OpenKAI MLR Agent",
+          short_desc: null,
+          is_default: false,
+          grant_type: "role"
+        }
+      ]
+    }
+  },
+  total: 2
+}
+```

@@ -844,11 +844,12 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       if (result.success && result.data) {
         // Handle various response structures
         let agents: any[] = [];
+        let roleGrouped: import('../types').RoleGroupedAgents = {};
 
         if (Array.isArray(result.data)) {
           agents = result.data;
         } else if (result.data.agents) {
-          // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "15": [...] } }
+          // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "2": { role_name: "CEO", agents: [...] } } }
           if (all && Array.isArray(result.data.agents.all)) {
             // For all=true, agents are under "all" key
             agents = result.data.agents.all;
@@ -856,12 +857,27 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
             // Direct array: { agents: [...] }
             agents = result.data.agents;
           } else if (typeof result.data.agents === 'object') {
-            // For role-specific, agents are under role ID keys: { agents: { "15": [...], "16": [...] } }
-            // Flatten all arrays from the object
+            // For role-specific, agents might be in new format: { "2": { role_name: "CEO", agents: [...] } }
+            // or old format: { "15": [...], "16": [...] }
             const agentObj = result.data.agents;
             Object.keys(agentObj).forEach(key => {
-              if (Array.isArray(agentObj[key])) {
-                agents = agents.concat(agentObj[key]);
+              // Skip "all" key which is for all=true response
+              if (key === 'all') return;
+
+              const roleData = agentObj[key];
+              if (roleData && typeof roleData === 'object') {
+                // Check if it's the new format with role_name and agents
+                if (roleData.role_name && Array.isArray(roleData.agents)) {
+                  // New format: { role_name: "CEO", agents: [...] }
+                  roleGrouped[key] = {
+                    role_name: roleData.role_name,
+                    agents: roleData.agents
+                  };
+                  agents = agents.concat(roleData.agents);
+                } else if (Array.isArray(roleData)) {
+                  // Old format: direct array under role ID
+                  agents = agents.concat(roleData);
+                }
               }
             });
           }
@@ -870,12 +886,18 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         }
 
         const total = result.data.total || agents.length;
+        const roleCount = Object.keys(roleGrouped).length;
 
-        this.log(`✅ Loaded ${agents.length} AI agents (total: ${total})`);
+        if (roleCount > 0) {
+          this.log(`✅ Loaded ${agents.length} AI agents across ${roleCount} roles (total: ${total})`);
+        } else {
+          this.log(`✅ Loaded ${agents.length} AI agents (total: ${total})`);
+        }
 
         return {
           success: true,
           agents,
+          roleGrouped: roleCount > 0 ? roleGrouped : undefined,
           total
         };
       } else {

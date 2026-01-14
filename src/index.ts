@@ -68,6 +68,11 @@ export type {
   // User State
   UserStateResult,
 
+  // AI Agents
+  Agent,
+  AgentsResult,
+  RoleGroupedAgents,
+
   // React
   UseCreditSystemReturn
 } from './types';

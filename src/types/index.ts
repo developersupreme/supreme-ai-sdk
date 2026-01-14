@@ -368,13 +368,26 @@ export interface Agent {
   id: number;
   name: string;
   description?: string;
+  short_desc?: string;
+  assistant_id?: string;
+  is_default?: boolean;
+  grant_type?: string;
   status?: string;
   created_at?: string;
   updated_at?: string;
   [key: string]: any;
 }
 
+// Role-grouped agents structure
+export interface RoleGroupedAgents {
+  [roleId: string]: {
+    role_name: string;
+    agents: Agent[];
+  };
+}
+
 export interface AgentsResult extends OperationResult {
   agents?: Agent[];
+  roleGrouped?: RoleGroupedAgents;
   total?: number;
 }
