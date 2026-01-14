@@ -1394,7 +1394,7 @@ var CreditSystemClient = class extends EventEmitter {
         if (Array.isArray(result.data)) {
           agents = result.data;
         } else if (result.data.agents) {
-          if (all && Array.isArray(result.data.agents.all)) {
+          if (Array.isArray(result.data.agents.all)) {
             agents = result.data.agents.all;
           } else if (Array.isArray(result.data.agents)) {
             agents = result.data.agents;

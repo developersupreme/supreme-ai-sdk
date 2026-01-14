@@ -8,6 +8,8 @@ Fetch AI agents for the current organization.
 |-----------|------|---------|-------------|
 | `all` | boolean | `false` | `true` = all agents in org, `false` = only agents for user's roles |
 
+> **Note:** Admin/superadmin users always receive all agents regardless of the `all` parameter.
+
 ## Usage
 
 ```typescript
@@ -43,7 +45,7 @@ function MyComponent() {
       console.log("My agents:", result.agents);
       console.log("Total:", result.total);
 
-      // Agents grouped by role (only available when all=false)
+      // Agents grouped by role (only available for non-admin users when all=false)
       if (result.roleGrouped) {
         Object.entries(result.roleGrouped).forEach(([roleId, data]) => {
           console.log(`Role: ${data.role_name} (ID: ${roleId})`);
@@ -59,7 +61,7 @@ function MyComponent() {
 }
 ```
 
-## Response when `getAgents(true)`
+## Response when `getAgents(true)` or Admin/Superadmin user
 
 ```typescript
 {
@@ -84,7 +86,7 @@ function MyComponent() {
 }
 ```
 
-## Response when `getAgents(false)`
+## Response when `getAgents(false)` for non-admin users
 
 ```typescript
 {
