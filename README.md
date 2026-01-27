@@ -24,6 +24,13 @@
     -   [Custom Hook vs SDK Comparison](#8-comparison-custom-hook-vs-sdk)
     -   [Parent Page Integration](#9-parent-page-integration)
 
+### 🔷 AI Agents System
+
+-   [getAgents() API](#getagents-api)
+    -   [Parameters](#getagents-parameters)
+    -   [Usage Examples](#getagents-usage-examples)
+    -   [Response Formats](#getagents-response-formats)
+
 ### 🔷 Personas System Implementation
 
 -   [Personas & User Details](#10-personas--user-details-integration)
@@ -64,9 +71,10 @@ Both modes utilize JWT (JSON Web Tokens) for secure API authentication, with dif
 
 The SDK package includes two separate clients:
 
-1. **CreditSystemClient**: For credit operations (check balance, spend credits, add credits, get history)
-   - Endpoint: `/api/secure-credits/jwt/*`
-   - Methods: `login()`, `checkBalance()`, `spendCredits()`, `addCredits()`, `getHistory()`
+1. **CreditSystemClient**: For credit operations, AI agents, and more
+   - Credit Endpoint: `/api/secure-credits/jwt/*`
+   - Agents Endpoint: `/api/ai-agents/jwt/*`
+   - Methods: `login()`, `checkBalance()`, `spendCredits()`, `addCredits()`, `getHistory()`, `getAgents()`
 
 2. **PersonasClient**: For persona management (fetch personas, fetch persona by ID)
    - Endpoint: `/api/personas/jwt/*`
@@ -1131,6 +1139,7 @@ await logout();
 | `spendCredits()` | Deduct credits from balance | `amount: number`<br/>`description?: string`<br/>`referenceId?: string` | `Promise<OperationResult>` |
 | `addCredits()`   | Add credits to balance      | `amount: number`<br/>`type?: string`<br/>`description?: string`        | `Promise<OperationResult>` |
 | `getHistory()`   | Fetch transaction history   | `page?: number`<br/>`limit?: number`                                   | `Promise<HistoryResult>`   |
+| `getAgents()`    | Fetch AI agents             | `all?: boolean`                                                        | `Promise<AgentsResult>`    |
 
 **Usage:**
 
@@ -1557,6 +1566,188 @@ iframe.addEventListener('load', async function() {
 
 ---
 
+# 🔷 AI Agents System
+
+## getAgents() API
+
+Fetch AI agents for the current organization.
+
+### getAgents Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `all` | `boolean` | `false` | `true` = all agents in org, `false` = only agents for user's roles |
+
+> **Note:** Admin/superadmin users always receive all agents regardless of the `all` parameter.
+
+### getAgents Usage Examples
+
+```typescript
+import { useCreditSystem, type Agent } from "@supreme-ai/si-sdk";
+
+function MyComponent() {
+  const { getAgents } = useCreditSystem({
+    apiBaseUrl: "https://app.supremegroup.ai/api/secure-credits/jwt",
+    authUrl: "https://app.supremegroup.ai/api/jwt",
+  });
+
+  // Get ALL agents in the organization
+  const loadAllAgents = async () => {
+    const result = await getAgents(true);
+
+    if (result.success) {
+      console.log("All agents:", result.agents);
+      console.log("Total:", result.total);
+
+      result.agents?.forEach((agent) => {
+        console.log(`- ${agent.name} (${agent.assistant_id})`);
+      });
+    } else {
+      console.error("Error:", result.error);
+    }
+  };
+
+  // Get only agents assigned to user's roles
+  const loadMyAgents = async () => {
+    const result = await getAgents(false);
+
+    if (result.success) {
+      console.log("My agents:", result.agents);
+      console.log("Total:", result.total);
+
+      // Agents grouped by role (only available for non-admin users when all=false)
+      if (result.roleGrouped) {
+        Object.entries(result.roleGrouped).forEach(([roleId, data]) => {
+          console.log(`Role: ${data.role_name} (ID: ${roleId})`);
+          data.agents.forEach((agent) => {
+            console.log(`  - ${agent.name}`);
+          });
+        });
+      }
+    } else {
+      console.error("Error:", result.error);
+    }
+  };
+}
+```
+
+### getAgents Response Formats
+
+#### Response when `getAgents(true)` or Admin/Superadmin user
+
+```typescript
+{
+  success: true,
+  agents: [
+    {
+      id: 14,
+      assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+      name: "OpenKAI MLR Agent",
+      description: "OpenKAI MLR Agent",
+      short_desc: null
+    },
+    {
+      id: 18,
+      assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
+      name: "PHC Main Agent",
+      description: null,
+      short_desc: "Custom AI supporting PHCbi projects..."
+    }
+  ],
+  total: 2
+}
+```
+
+#### Response when `getAgents(false)` for non-admin users
+
+```typescript
+{
+  success: true,
+  agents: [
+    {
+      id: 18,
+      assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
+      name: "PHC Main Agent",
+      description: null,
+      short_desc: "Custom AI supporting PHCbi projects...",
+      is_default: false,
+      grant_type: "organization"
+    },
+    {
+      id: 14,
+      assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+      name: "OpenKAI MLR Agent",
+      description: "OpenKAI MLR Agent",
+      short_desc: null,
+      is_default: false,
+      grant_type: "role"
+    }
+  ],
+  roleGrouped: {
+    "2": {
+      role_name: "CEO",
+      agents: [
+        {
+          id: 18,
+          assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
+          name: "PHC Main Agent",
+          description: null,
+          short_desc: "Custom AI supporting PHCbi projects...",
+          is_default: false,
+          grant_type: "organization"
+        }
+      ]
+    },
+    "13": {
+      role_name: "Developer",
+      agents: [
+        {
+          id: 14,
+          assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+          name: "OpenKAI MLR Agent",
+          description: "OpenKAI MLR Agent",
+          short_desc: null,
+          is_default: false,
+          grant_type: "role"
+        }
+      ]
+    }
+  },
+  total: 2
+}
+```
+
+#### Agent Type Definition
+
+```typescript
+interface Agent {
+  id: number;
+  assistant_id: string;
+  name: string;
+  description: string | null;
+  short_desc: string | null;
+  is_default?: boolean;
+  grant_type?: string; // "organization" | "role"
+}
+
+interface RoleGroupedAgents {
+  [roleId: string]: {
+    role_name: string;
+    agents: Agent[];
+  };
+}
+
+interface AgentsResult {
+  success: boolean;
+  error?: string;
+  agents?: Agent[];
+  roleGrouped?: RoleGroupedAgents;
+  total?: number;
+}
+```
+
+---
+
 # 🔷 Personas System Implementation
 
 ### 10. Personas & User Details Integration
@@ -1767,6 +1958,7 @@ const personasClient = new PersonasClient({
 | **CreditSystemClient** | `checkBalance()` | `GET /api/secure-credits/jwt/balance` | Get user's credit balance |
 | **CreditSystemClient** | `spendCredits(amount, reason)` | `POST /api/secure-credits/jwt/spend` | Deduct credits from balance |
 | **CreditSystemClient** | `addCredits(amount, reason)` | `POST /api/secure-credits/jwt/add` | Add credits to balance |
+| **CreditSystemClient** | `getAgents(all?)` | `GET /api/ai-agents/jwt/` | Fetch AI agents for the organization |
 
 ---
 
@@ -2179,6 +2371,92 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
         "total": 150,
         "current_page": 1,
         "per_page": 20
+    }
+}
+```
+
+### AI Agents Endpoints
+
+#### 5. Get Agents (All)
+
+```http
+GET /api/ai-agents/jwt/?organization_id=1&all=true
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "agents": {
+            "all": [
+                {
+                    "id": 14,
+                    "assistant_id": "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+                    "name": "OpenKAI MLR Agent",
+                    "description": "OpenKAI MLR Agent",
+                    "short_desc": null
+                },
+                {
+                    "id": 18,
+                    "assistant_id": "c77f12e6-7333-43bc-8551-b50d277e59f0",
+                    "name": "PHC Main Agent",
+                    "description": null,
+                    "short_desc": "Custom AI supporting PHCbi projects..."
+                }
+            ]
+        },
+        "total": 2
+    }
+}
+```
+
+#### 6. Get Agents (By Role)
+
+```http
+GET /api/ai-agents/jwt/?organization_id=1&role_ids=2,13
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "agents": {
+            "2": {
+                "role_name": "CEO",
+                "agents": [
+                    {
+                        "id": 18,
+                        "assistant_id": "c77f12e6-7333-43bc-8551-b50d277e59f0",
+                        "name": "PHC Main Agent",
+                        "description": null,
+                        "short_desc": "Custom AI supporting PHCbi projects...",
+                        "is_default": false,
+                        "grant_type": "organization"
+                    }
+                ]
+            },
+            "13": {
+                "role_name": "Developer",
+                "agents": [
+                    {
+                        "id": 14,
+                        "assistant_id": "4dd46d71-8690-49ef-9b3a-5042d33034fa",
+                        "name": "OpenKAI MLR Agent",
+                        "description": "OpenKAI MLR Agent",
+                        "short_desc": null,
+                        "is_default": false,
+                        "grant_type": "role"
+                    }
+                ]
+            }
+        },
+        "total": 2
     }
 }
 ```
