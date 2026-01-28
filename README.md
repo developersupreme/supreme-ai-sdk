@@ -4,25 +4,37 @@
 
 ## Table of Contents
 
+### 🔷 Getting Started
+
 -   [Overview](#overview)
+-   [SDK Components](#sdk-components)
+
+### 🔷 Installation & Setup
+
+-   [Getting Started](#implementation-details)
+    -   [Lovable App Setup & Installation](#1-lovable-app-setup--installation)
+    -   [JWT Token Structure](#2-jwt-token-structure)
+-   [Environment Configuration](#environment-configuration)
+
+### 🔷 Authentication
+
 -   [Authentication Flow](#authentication-flow)
     -   [Standalone Mode](#standalone-mode)
     -   [Embedded Mode (iframe)](#embedded-mode-iframe)
 
 ### 🔷 Credit System Implementation
 
--   [Getting Started](#implementation-details)
-    -   [Lovable App Setup & Installation](#1-lovable-app-setup--installation)
-    -   [JWT Token Structure](#2-jwt-token-structure)
-    -   [Custom Hook Implementation](#3-implementation-custom-hook-usesimplecreditsystem)
+-   [Custom Hook Implementation](#3-implementation-custom-hook-usesimplecreditsystem)
 -   [Credit System Modes](#credit-system-modes)
     -   [Standalone Mode Implementation](#4-standalone-mode-implementation)
     -   [Embedded Mode Implementation](#5-embedded-mode-implementation)
     -   [SDK Methods Reference](#6-sdk-methods-reference)
--   [Credit System SDK](#credit-system-sdk)
-    -   [Supreme Credit SDK (NPM Package)](#7-supreme-credit-sdk-npm-package)
-    -   [Custom Hook vs SDK Comparison](#8-comparison-custom-hook-vs-sdk)
-    -   [Parent Page Integration](#9-parent-page-integration)
+
+### 🔷 Credit System SDK
+
+-   [Supreme Credit SDK (NPM Package)](#7-supreme-credit-sdk-npm-package)
+-   [Custom Hook vs SDK Comparison](#8-comparison-custom-hook-vs-sdk)
+-   [Parent Page Integration](#9-parent-page-integration)
 
 ### 🔷 AI Agents System
 
@@ -31,18 +43,25 @@
     -   [Usage Examples](#getagents-usage-examples)
     -   [Response Formats](#getagents-response-formats)
 
-### 🔷 Personas System Implementation
+### 🔷 Personas System
 
--   [Personas & User Details](#10-personas--user-details-integration)
+-   [Personas & User Details Integration](#10-personas--user-details-integration)
     -   [Architecture Overview](#architecture-overview)
     -   [SDK Installation & Setup](#sdk-installation--setup)
     -   [PersonasClient SDK Usage](#personasclient-sdk-usage)
     -   [SessionStorage Keys](#sessionstorage-keys)
     -   [SDK Methods Comparison](#sdk-methods-comparison)
 
-### 🔷 Reference & Security
+### 🔷 API Reference
 
 -   [API Endpoints](#api-endpoints)
+    -   [JWT Authentication Endpoints](#jwt-authentication-endpoints)
+    -   [Credit System Endpoints](#credit-system-endpoints)
+    -   [AI Agents Endpoints](#ai-agents-endpoints)
+-   [Sequence Diagrams](#sequence-diagrams)
+
+### 🔷 Security & Best Practices
+
 -   [Security Best Practices](#security-best-practices-client-side)
     -   [Token Storage](#1-token-storage)
     -   [PostMessage Origin Validation](#2-postmessage-origin-validation)
@@ -50,10 +69,11 @@
     -   [Environment Variables](#4-environment-variables)
     -   [SDK Security Configuration](#5-sdk-security-configuration)
     -   [HTTPS Only in Production](#6-https-only-in-production)
--   [Sequence Diagrams](#sequence-diagrams)
--   [Environment Configuration](#environment-configuration)
--   [Troubleshooting](#troubleshooting)
 -   [Best Practices](#best-practices)
+
+### 🔷 Troubleshooting & Resources
+
+-   [Troubleshooting](#troubleshooting)
 -   [Conclusion](#conclusion)
 
 ---
@@ -193,106 +213,6 @@ sequenceDiagram
     Hook->>Iframe: Update balance (8,170)
     Iframe->>Parent: postMessage('CREDITS_SPENT',<br/>{amount: 100, newBalance: 8170})
 ```
-
-#### JWT_TOKEN_RESPONSE Structure
-
-When the SDK auto-authenticates in embedded mode, the parent window responds with a `JWT_TOKEN_RESPONSE` message containing the following data:
-
-```json
-{
-    "type": "JWT_TOKEN_RESPONSE",
-    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ-7jzGjGb8",
-    "refreshToken": ".ip86N7Tct6byyQOL7gz2aDP1bp-Em1kk5lpFapmTzrc",
-    "user": {
-        "id": 19,
-        "email": "developer+superadmin@supremeopti.com",
-        "name": "superadmin developer"
-    },
-    "error": null,
-    "organization": {
-        "organizationId": "1",
-        "organizationName": "Supreme Optimization",
-        "userRoleIds": [15]
-    },
-    "organizations": [
-        {
-            "id": "1",
-            "name": "Supreme Optimization",
-            "slug": "supreme",
-            "domain": "https://www.supremeopti.com/",
-            "selectedStatus": true,
-            "credits": 24980,
-            "user_role_ids": [15],
-            "user_role_details": {
-                "15": "orgadmin"
-            }
-        },
-        {
-            "id": "2",
-            "name": "Kadiko",
-            "slug": "kadiko",
-            "domain": "https://kadiko.com/",
-            "selectedStatus": false,
-            "credits": 2100,
-            "user_role_ids": [8, 16],
-            "user_role_details": {
-                "8": "HR",
-                "16": "orgadmin"
-            }
-        }
-    ],
-    "personas": [
-        {
-            "id": "6",
-            "name": "ICP Persona 1",
-            "description": "",
-            "category_id": null,
-            "category_name": "Biopharma / Diagnostics"
-        },
-        {
-            "id": "7",
-            "name": "ICP Persona 2",
-            "description": "",
-            "category_id": null,
-            "category_name": "Biopharma / Diagnostics"
-        }
-    ],
-    "timestamp": 1769606070274
-}
-```
-
-##### Response Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | `string` | Message type identifier (`JWT_TOKEN_RESPONSE`) |
-| `token` | `string` | JWT access token for API authentication |
-| `refreshToken` | `string` | Refresh token for obtaining new access tokens |
-| `user` | `object` | Basic user information |
-| `user.id` | `number` | User's unique identifier |
-| `user.email` | `string` | User's email address |
-| `user.name` | `string` | User's display name |
-| `error` | `string\|null` | Error message if authentication failed |
-| `organization` | `object` | Currently selected organization details |
-| `organization.organizationId` | `string` | Organization ID |
-| `organization.organizationName` | `string` | Organization name |
-| `organization.userRoleIds` | `number[]` | User's role IDs in this organization |
-| `organizations` | `array` | All organizations the user belongs to |
-| `organizations[].id` | `string` | Organization ID |
-| `organizations[].name` | `string` | Organization name |
-| `organizations[].slug` | `string` | URL-friendly organization identifier |
-| `organizations[].domain` | `string` | Organization's domain URL |
-| `organizations[].selectedStatus` | `boolean` | `true` if this is the currently selected org |
-| `organizations[].credits` | `number` | Available credits for this organization |
-| `organizations[].user_role_ids` | `number[]` | User's role IDs in this organization |
-| `organizations[].user_role_details` | `object` | Mapping of role ID to role name |
-| `personas` | `array` | User's available personas |
-| `personas[].id` | `string` | Persona ID |
-| `personas[].name` | `string` | Persona name |
-| `personas[].description` | `string` | Persona description |
-| `personas[].category_id` | `string\|null` | Category ID (if assigned) |
-| `personas[].category_name` | `string` | Category name |
-| `timestamp` | `number` | Unix timestamp of the response |
 
 ---
 
@@ -2292,34 +2212,105 @@ X-CSRF-TOKEN: ...
 }
 ```
 
-#### 2. Generate JWT from Session (Embedded Mode)
+**JWT_TOKEN_RESPONSE Structure (PostMessage Format):**
 
-```http
-POST /iframe/jwt-from-session
-Cookie: laravel_session=...
-X-CSRF-TOKEN: ...
-```
-
-**Response:**
+When using embedded mode, the parent window sends JWT tokens to the iframe via postMessage with this structure:
 
 ```json
 {
-    "success": true,
-    "data": {
-        "tokens": {
-            "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "token_type": "Bearer",
-            "expires_in": 900
+    "type": "JWT_TOKEN_RESPONSE",
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ-7jzGjGb8",
+    "refreshToken": ".ip86N7Tct6byyQOL7gz2aDP1bp-Em1kk5lpFapmTzrc",
+    "user": {
+        "id": 19,
+        "email": "developer+superadmin@supremeopti.com",
+        "name": "superadmin developer"
+    },
+    "error": null,
+    "organization": {
+        "organizationId": "1",
+        "organizationName": "Supreme Optimization",
+        "userRoleIds": [15]
+    },
+    "organizations": [
+        {
+            "id": "1",
+            "name": "Supreme Optimization",
+            "slug": "supreme",
+            "domain": "https://www.supremeopti.com/",
+            "selectedStatus": true,
+            "credits": 24980,
+            "user_role_ids": [15],
+            "user_role_details": {
+                "15": "orgadmin"
+            }
         },
-        "user": {
-            "id": 123,
-            "email": "user@example.com",
-            "name": "John Doe"
+        {
+            "id": "2",
+            "name": "Kadiko",
+            "slug": "kadiko",
+            "domain": "https://kadiko.com/",
+            "selectedStatus": false,
+            "credits": 2100,
+            "user_role_ids": [8, 16],
+            "user_role_details": {
+                "8": "HR",
+                "16": "orgadmin"
+            }
         }
-    }
+    ],
+    "personas": [
+        {
+            "id": "6",
+            "name": "ICP Persona 1",
+            "description": "",
+            "category_id": null,
+            "category_name": "Biopharma / Diagnostics"
+        },
+        {
+            "id": "7",
+            "name": "ICP Persona 2",
+            "description": "",
+            "category_id": null,
+            "category_name": "Biopharma / Diagnostics"
+        }
+    ],
+    "timestamp": 1769606070274
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `string` | Message type identifier (`JWT_TOKEN_RESPONSE`) |
+| `token` | `string` | JWT access token for API authentication |
+| `refreshToken` | `string` | Refresh token for obtaining new access tokens |
+| `user` | `object` | Basic user information |
+| `user.id` | `number` | User's unique identifier |
+| `user.email` | `string` | User's email address |
+| `user.name` | `string` | User's display name |
+| `error` | `string\|null` | Error message if authentication failed |
+| `organization` | `object` | Currently selected organization details |
+| `organization.organizationId` | `string` | Organization ID |
+| `organization.organizationName` | `string` | Organization name |
+| `organization.userRoleIds` | `number[]` | User's role IDs in this organization |
+| `organizations` | `array` | All organizations the user belongs to |
+| `organizations[].id` | `string` | Organization ID |
+| `organizations[].name` | `string` | Organization name |
+| `organizations[].slug` | `string` | URL-friendly organization identifier |
+| `organizations[].domain` | `string` | Organization's domain URL |
+| `organizations[].selectedStatus` | `boolean` | `true` if this is the currently selected org |
+| `organizations[].credits` | `number` | Available credits for this organization |
+| `organizations[].user_role_ids` | `number[]` | User's role IDs in this organization |
+| `organizations[].user_role_details` | `object` | Mapping of role ID to role name |
+| `personas` | `array` | User's available personas |
+| `personas[].id` | `string` | Persona ID |
+| `personas[].name` | `string` | Persona name |
+| `personas[].description` | `string` | Persona description |
+| `personas[].category_id` | `string\|null` | Category ID (if assigned) |
+| `personas[].category_name` | `string` | Category name |
+| `timestamp` | `number` | Unix timestamp of the response |
 
 #### 3. Refresh Token
 
