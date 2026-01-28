@@ -147,6 +147,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     // Set up message listener for parent response
     this.messageBridge.on('JWT_TOKEN_RESPONSE', (data: TokenResponseMessage) => {
       this.log('📨 Received JWT_TOKEN_RESPONSE from parent');
+      this.log('📨 Received data from parent', data);
       this.handleParentTokenResponse(data);
     });
 

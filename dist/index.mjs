@@ -814,6 +814,7 @@ var CreditSystemClient = class extends EventEmitter {
     this.log(`\u23F1\uFE0F Parent timeout set to ${this.config.parentTimeout}ms`);
     this.messageBridge.on("JWT_TOKEN_RESPONSE", (data) => {
       this.log("\u{1F4E8} Received JWT_TOKEN_RESPONSE from parent");
+      this.log("\u{1F4E8} Received data from parent", data);
       this.handleParentTokenResponse(data);
     });
     this.messageBridge.on("RESPONSE_CURRENT_USER_STATE", (data) => {
