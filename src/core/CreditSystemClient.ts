@@ -12,6 +12,7 @@ import type {
   CreditSDKConfig,
   SDKState,
   User,
+  Organization,
   AuthResult,
   BalanceResult,
   SpendResult,
@@ -24,7 +25,8 @@ import type {
   Persona,
   UserStateResponseMessage,
   UserStateResult,
-  AgentsResult
+  AgentsResult,
+  SwitchOrgResult
 } from '../types';
 
 export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
@@ -75,7 +77,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       isAuthenticated: false,
       user: null,
       balance: 0,
-      personas: []
+      personas: [],
+      accessToken: null,
+      refreshToken: null,
+      organizations: [],
+      selectedOrganization: null
     };
 
     // Initialize components
@@ -235,6 +241,32 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
       this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
+      this.state.accessToken = data.token || null;
+      this.state.refreshToken = data.refreshToken || null;
+
+      // Store organizations in state
+      const orgs = (data as any).organizations || enrichedUser?.organizations;
+      if (orgs && Array.isArray(orgs)) {
+        // Normalize: support both isSelected and selectedStatus
+        const normalizedOrgs = orgs.map((org: any, index: number) => {
+          const selected = org.isSelected ?? org.selectedStatus ?? (index === 0);
+          const userRoleIds = org.user_role_ids ?? (org.roles ? Object.keys(org.roles).map(Number) : undefined);
+          return {
+            ...org,
+            selectedStatus: selected,
+            isSelected: selected,
+            ...(userRoleIds ? { user_role_ids: userRoleIds } : {}),
+          };
+        });
+        this.state.organizations = normalizedOrgs;
+        this.state.selectedOrganization = normalizedOrgs.find((o: any) => o.selectedStatus) || normalizedOrgs[0] || null;
+        this.emit('organizationsUpdated', { organizations: normalizedOrgs });
+      }
+
+      this.emit('tokensUpdated', {
+        accessToken: data.token!,
+        refreshToken: data.refreshToken
+      });
 
       this.log('🚀 Initializing with token...');
       this.initializeWithToken();
@@ -275,6 +307,17 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         this.log('✅ Token is valid!');
         this.state.user = savedAuth.user;
         this.state.isAuthenticated = true;
+        this.state.accessToken = savedAuth.token;
+        this.state.refreshToken = savedAuth.refreshToken || null;
+
+        // Restore organizations from saved user
+        if (savedAuth.user?.organizations && Array.isArray(savedAuth.user.organizations)) {
+          this.state.organizations = savedAuth.user.organizations;
+          this.state.selectedOrganization = savedAuth.user.organizations.find(
+            (o: any) => o.selectedStatus || o.isSelected
+          ) || savedAuth.user.organizations[0] || null;
+        }
+
         this.log('🚀 Initializing with valid token...');
         this.initializeWithToken();
       } else {
@@ -373,6 +416,39 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
         this.state.user = result.user;
         this.state.isAuthenticated = true;
+        this.state.accessToken = result.tokens.access_token;
+        this.state.refreshToken = result.tokens.refresh_token;
+
+        // Store organizations in state
+        if (result.user.organizations && Array.isArray(result.user.organizations)) {
+          this.log('📦 Raw orgs from API:', result.user.organizations.map((o: any) => ({
+            id: o.id, name: o.name, hasAgents: !!o.agents, hasRoles: !!o.roles, isSelected: o.isSelected,
+          })));
+          const orgs: Organization[] = result.user.organizations.map((org, index) => {
+            // Normalize: support both isSelected and selectedStatus from API
+            const selected = org.isSelected ?? org.selectedStatus ?? (index === 0);
+            // Derive user_role_ids from roles object if not already set
+            const userRoleIds = org.user_role_ids ?? (org.roles ? Object.keys(org.roles).map(Number) : undefined);
+            return {
+              ...org,
+              selectedStatus: selected,
+              isSelected: selected,
+              ...(userRoleIds ? { user_role_ids: userRoleIds } : {}),
+            };
+          });
+          this.state.organizations = orgs;
+          this.state.selectedOrganization = orgs.find(o => o.selectedStatus) || orgs[0] || null;
+          this.emit('organizationsUpdated', { organizations: orgs });
+          this.log(`🏢 Stored ${orgs.length} organizations. Selected: ${this.state.selectedOrganization?.name} (ID: ${this.state.selectedOrganization?.id})`);
+          if (this.state.selectedOrganization?.agents?.all) {
+            this.log(`🤖 Selected org has ${this.state.selectedOrganization.agents.all.length} agents`);
+          }
+        }
+
+        this.emit('tokensUpdated', {
+          accessToken: result.tokens.access_token,
+          refreshToken: result.tokens.refresh_token
+        });
 
         this.log('🚀 Initializing with token...');
         this.initializeWithToken();
@@ -414,6 +490,10 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.state.balance = 0;
     this.state.isInitialized = false;
     this.state.isAuthenticated = false;
+    this.state.accessToken = null;
+    this.state.refreshToken = null;
+    this.state.organizations = [];
+    this.state.selectedOrganization = null;
 
     // Clear storage
     this.storage.remove('auth');
@@ -441,15 +521,13 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     this.log('💰 Fetching current balance...');
-    this.log('👤 Current user state:', this.state.user);
+    this.log(`👤 User: ${this.state.user?.email} (ID: ${this.state.user?.id})`);
 
     try {
       // Build query parameters with organization_id if available
       const params: Record<string, string> = {};
       // Get organization_id from selected organization (same as spendCredits logic)
-      const organizations = this.state.user?.organizations as any[];
-      const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
-      const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+      const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
 
       this.log(`🔍 Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
 
@@ -553,7 +631,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'Insufficient credits' };
     }
 
-    if(this.config.debug)this.log('👤 Current user state:', this.state.user);
+    if(this.config.debug)this.log(`👤 User: ${this.state.user?.email} (ID: ${this.state.user?.id})`);
 
     // Get user_id from state
     const userId = this.state.user?.id;
@@ -562,10 +640,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'User ID not found' };
     }
 
-    // Get organization_id from selected organization
-    const organizations = this.state.user?.organizations as any[];
-    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id;
+    // Get organization_id from selected organization or cookie
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
 
     if(this.config.debug)this.log('organizationId', organizationId);
 
@@ -575,11 +651,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     // Get user_role_id (optional) - get first role from selected org
-    const userRoleId = selectedOrg?.user_role_ids?.[0];
+    const userRoleId = this.state.selectedOrganization?.user_role_ids?.[0];
 
     this.log(`💳 Spending ${amount} credits...`);
     this.log(`👤 User ID: ${userId}`);
-    this.log(`🏢 Organization ID: ${organizationId} (${selectedOrg.name})`);
+    this.log(`🏢 Organization ID: ${organizationId} (${this.state.selectedOrganization?.name || 'from cookie'})`);
     if (userRoleId) this.log(`🔑 User Role ID: ${userRoleId}`);
     if (description) this.log(`📝 Description: ${description}`);
     if (referenceId) this.log(`🔗 Reference ID: ${referenceId}`);
@@ -664,10 +740,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'User ID not found' };
     }
 
-    // Get organization_id from selected organization
-    const organizations = this.state.user?.organizations as any[];
-    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id;
+    // Get organization_id from selected organization or cookie
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
 
     if (!organizationId) {
       this.log('⚠️ Add credits blocked: No selected organization found');
@@ -675,11 +749,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     // Get user_role_id (optional) - get first role from selected org
-    const userRoleId = selectedOrg?.user_role_ids?.[0];
+    const userRoleId = this.state.selectedOrganization?.user_role_ids?.[0];
 
     this.log(`➕ Adding ${amount} credits...`);
     this.log(`👤 User ID: ${userId}`);
-    this.log(`🏢 Organization ID: ${organizationId} (${selectedOrg.name})`);
+    this.log(`🏢 Organization ID: ${organizationId} (${this.state.selectedOrganization?.name || 'from cookie'})`);
     if (userRoleId) this.log(`🔑 User Role ID: ${userRoleId}`);
     if (description) this.log(`📝 Description: ${description}`);
     this.log(`🏷️ Type: ${type}`);
@@ -748,10 +822,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       return { success: false, error: 'Not authenticated' };
     }
 
-    // Get organization_id from selected organization
-    const organizations = this.state.user?.organizations as any[];
-    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id;
+    // Get organization_id from selected organization or cookie
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
 
     if (!organizationId) {
       this.log('⚠️ Get history blocked: No selected organization found');
@@ -812,9 +884,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     }
 
     // Get organization_id from selected organization or cookie (for standalone mode)
-    const organizations = this.state.user?.organizations as any[];
-    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
 
     this.log(`🔍 Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
 
@@ -832,8 +902,8 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`🤖 Fetching all AI agents for organization ${organizationId}...`);
     } else {
       // Fetch agents filtered by user's role IDs
-      // Try multiple sources: selectedOrg.user_role_ids, or user.userRoleIds (from parent state)
-      const roleIds = selectedOrg?.user_role_ids || this.state.user?.userRoleIds;
+      // Try multiple sources: selectedOrganization.user_role_ids, or user.userRoleIds (from parent state)
+      const roleIds = this.state.selectedOrganization?.user_role_ids || this.state.user?.userRoleIds;
       if (!roleIds || roleIds.length === 0) {
         this.log('⚠️ Get agents blocked: No role IDs found for user in selected organization');
         return { success: false, error: 'No role IDs found for user' };
@@ -1157,6 +1227,13 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
             // Update SDK state
             this.state.user = updatedUser;
 
+            // Sync organizations to state
+            this.state.organizations = updatedOrganizations;
+            this.state.selectedOrganization = updatedOrganizations.find(
+              (org: any) => org.selectedStatus
+            ) || null;
+            this.emit('organizationsUpdated', { organizations: updatedOrganizations });
+
             // Update personas if provided
             if (data.userState.personas) {
               this.state.personas = data.userState.personas;
@@ -1424,7 +1501,17 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         this.log(`   • Refresh Token: ${hasNewRefreshToken ? 'UPDATED ✓' : 'PRESERVED ✓'}`);
         this.log(`   • User Data:     PRESERVED ✓`);
 
+        // Update in-memory state with new tokens
+        this.state.accessToken = result.tokens.access_token;
+        if (hasNewRefreshToken) {
+          this.state.refreshToken = result.tokens.refresh_token!;
+        }
+
         this.emit('tokenRefreshed');
+        this.emit('tokensUpdated', {
+          accessToken: result.tokens.access_token,
+          refreshToken: newRefreshToken
+        });
 
         // Notify parent if in embedded mode
         if (this.state.mode === 'embedded') {
@@ -1525,6 +1612,92 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         this.logout();
       });
     }
+  }
+
+  /**
+   * Switch to a different organization
+   */
+  async switchOrganization(orgId: string): Promise<SwitchOrgResult> {
+    this.log(`🔄 switchOrganization called with orgId: ${orgId} (type: ${typeof orgId})`);
+
+    if (!this.state.isAuthenticated || !this.state.user) {
+      this.log('❌ switchOrganization: User not authenticated');
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    this.log(`📋 SDK has ${this.state.organizations.length} organizations in state`);
+    if (this.state.organizations.length > 0) {
+      this.log('📋 Organization IDs in SDK state:', this.state.organizations.map(o => `${o.id} (type: ${typeof o.id}, selectedStatus: ${o.selectedStatus})`));
+    }
+
+    if (this.state.organizations.length === 0) {
+      this.log('❌ switchOrganization: No organizations in SDK state');
+      return { success: false, error: 'No organizations found for user' };
+    }
+
+    const targetOrg = this.state.organizations.find(org => String(org.id) === String(orgId));
+    if (!targetOrg) {
+      this.log(`❌ switchOrganization: Organization with ID ${orgId} not found. Available IDs: ${this.state.organizations.map(o => o.id).join(', ')}`);
+      return { success: false, error: `Organization with ID ${orgId} not found` };
+    }
+
+    const previousOrg = this.state.selectedOrganization;
+    if (String(previousOrg?.id) === String(orgId)) {
+      this.log(`ℹ️ switchOrganization: Already on org ${orgId}, no change needed`);
+      return { success: true, previousOrgId: String(orgId), newOrgId: String(orgId) };
+    }
+
+    // Update organizations array
+    const isMatch = (org: Organization) => String(org.id) === String(orgId);
+    const updatedOrgs = this.state.organizations.map(org => ({
+      ...org,
+      selectedStatus: isMatch(org),
+      isSelected: isMatch(org),
+    }));
+
+    // Update state
+    this.state.organizations = updatedOrgs;
+    this.state.selectedOrganization = updatedOrgs.find(o => o.selectedStatus) || null;
+
+    // Update user.organizations to keep in sync
+    if (this.state.user) {
+      this.state.user = {
+        ...this.state.user,
+        organizations: updatedOrgs,
+      };
+    }
+
+    // Update storage
+    const auth = this.storage.get('auth');
+    if (auth) {
+      this.storage.set('auth', {
+        ...auth,
+        user: { ...auth.user, organizations: updatedOrgs },
+      });
+    }
+
+    // Update cookie for API compatibility
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 30);
+    document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+
+    this.log(`🏢 Organization switched: ${previousOrg?.name} -> ${targetOrg.name}`);
+    this.log('📋 Updated organizations:', updatedOrgs.map(o => `${o.name}: selectedStatus=${o.selectedStatus}`));
+
+    this.emit('organizationSwitched', {
+      previousOrgId: previousOrg?.id,
+      newOrgId: orgId,
+      organization: this.state.selectedOrganization!,
+    });
+
+    // Also emit organizationsUpdated so React hook syncs the full list
+    this.emit('organizationsUpdated', { organizations: updatedOrgs });
+
+    return {
+      success: true,
+      previousOrgId: previousOrg?.id,
+      newOrgId: orgId,
+    };
   }
 
   /**

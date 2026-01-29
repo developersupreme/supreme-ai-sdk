@@ -4,19 +4,26 @@ import { ReactNode } from 'react';
 /**
  * Supreme AI Credit SDK - Type Definitions
  */
+interface Organization {
+    id?: string;
+    name?: string;
+    slug?: string;
+    domain?: string;
+    selectedStatus?: boolean;
+    isSelected?: boolean;
+    credits?: number;
+    user_role_ids?: number[];
+    roles?: Record<string, string>;
+    agents?: {
+        all?: Agent[];
+        [roleId: string]: Agent[] | any;
+    };
+}
 interface User {
     id: number;
     email: string;
     name?: string;
-    organizations?: Array<{
-        id?: string;
-        name?: string;
-        slug?: string;
-        domain?: string;
-        selectedStatus?: boolean;
-        credits?: number;
-        user_role_ids?: number[];
-    }>;
+    organizations?: Organization[];
     personas?: Array<{
         id: string;
         name: string;
@@ -88,6 +95,10 @@ interface SDKState {
     user: User | null;
     balance: number;
     personas: Persona[];
+    accessToken: string | null;
+    refreshToken: string | null;
+    organizations: Organization[];
+    selectedOrganization: Organization | null;
 }
 interface IframeMessage {
     type: string;
@@ -108,15 +119,7 @@ interface TokenResponseMessage extends IframeMessage {
         organizationName: string;
         userRoleIds: number[];
     };
-    organizations?: Array<{
-        id?: string;
-        name?: string;
-        slug?: string;
-        domain?: string;
-        selectedStatus?: boolean;
-        credits?: number;
-        user_role_ids?: number[];
-    }>;
+    organizations?: Organization[];
     personas?: Array<{
         id: string;
         name: string;
@@ -195,6 +198,18 @@ type CreditSDKEvents = {
     'parentAuthRequired': {
         error: string;
     };
+    'organizationsUpdated': {
+        organizations: Organization[];
+    };
+    'organizationSwitched': {
+        previousOrgId?: string;
+        newOrgId: string;
+        organization: Organization;
+    };
+    'tokensUpdated': {
+        accessToken: string;
+        refreshToken?: string;
+    };
 };
 interface ApiResponse<T = any> {
     success: boolean;
@@ -236,15 +251,7 @@ interface HistoryResult extends OperationResult {
     pages?: number;
 }
 interface UserOrgsResult extends OperationResult {
-    organizations?: Array<{
-        id?: string;
-        name?: string;
-        slug?: string;
-        domain?: string;
-        selectedStatus?: boolean;
-        credits?: number;
-        user_role_ids?: number[];
-    }>;
+    organizations?: Organization[];
     count?: number;
 }
 interface UserPersonasResult extends OperationResult {
@@ -257,6 +264,12 @@ interface UserPersonasResult extends OperationResult {
     }>;
     count?: number;
 }
+interface SwitchOrgResult {
+    success: boolean;
+    error?: string;
+    previousOrgId?: string;
+    newOrgId?: string;
+}
 interface UseCreditSystemReturn {
     isInitialized: boolean;
     isAuthenticated: boolean;
@@ -266,6 +279,10 @@ interface UseCreditSystemReturn {
     personas: Persona[];
     loading: boolean;
     error: string | null;
+    accessToken: string | null;
+    refreshToken: string | null;
+    organizations: Organization[];
+    selectedOrganization: Organization | null;
     login: (email: string, password: string) => Promise<AuthResult>;
     logout: () => Promise<void>;
     checkBalance: () => Promise<BalanceResult>;
@@ -278,6 +295,7 @@ interface UseCreditSystemReturn {
     requestCurrentUserState: () => Promise<UserStateResult>;
     requestUserOrganizations: () => Promise<UserOrgsResult>;
     requestUserPersonas: () => Promise<UserPersonasResult>;
+    switchOrganization: (orgId: string) => Promise<SwitchOrgResult>;
 }
 interface Persona {
     id: number;
@@ -487,6 +505,10 @@ declare class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
      */
     private setupEventHandlers;
     /**
+     * Switch to a different organization
+     */
+    switchOrganization(orgId: string): Promise<SwitchOrgResult>;
+    /**
      * Get current state
      */
     getState(): SDKState;
@@ -549,18 +571,9 @@ declare function useCreditContext(): UseCreditSystemReturn;
 
 /**
  * React Hook for switching selected organization
- * Updates organization status everywhere it's stored:
- * - User state in storage
- * - Cookie for API compatibility
- * - Updates balance from organization object (no API call - instant!)
- * - Emits balanceUpdate event to update SDK state
+ * Delegates to the core CreditSystemClient.switchOrganization() method
  */
-interface SwitchOrgResult {
-    success: boolean;
-    error?: string;
-    previousOrgId?: string;
-    newOrgId?: string;
-}
+
 declare function useSwitchOrganization(): {
     switchOrganization: (orgId: string) => Promise<SwitchOrgResult>;
 };
@@ -682,4 +695,4 @@ declare class ParentIntegrator {
  * @packageDocumentation
  */
 
-export { type AddCreditsResponse, type AddResult, type Agent, type AgentsResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type RoleGroupedAgents, type SDKState, type SpendResponse, type SpendResult, type SwitchOrgResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, type UserStateRequestMessage, type UserStateResponseMessage, type UserStateResult, CreditSystemClient as default, useCreditContext, useCreditSystem, useSwitchOrganization };
+export { type AddCreditsResponse, type AddResult, type Agent, type AgentsResult, type ApiResponse, type AuthResult, type AuthTokens, type BalanceResponse, type BalanceResult, type CreditBalance, type CreditSDKConfig, type CreditSDKEvents, CreditSystemClient, CreditSystemProvider, type HistoryResult, type IframeMessage, type OperationResult, type Organization, type ParentConfig, ParentIntegrator, type Persona, type PersonaResult, PersonasClient, type PersonasClientConfig, type PersonasResult, type RoleGroupedAgents, type SDKState, type SpendResponse, type SpendResult, type SwitchOrgResult, type TokenRequestMessage, type TokenResponseMessage, type Transaction, type TransactionHistory, type UseCreditSystemReturn, type User, type UserStateRequestMessage, type UserStateResponseMessage, type UserStateResult, CreditSystemClient as default, useCreditContext, useCreditSystem, useSwitchOrganization };

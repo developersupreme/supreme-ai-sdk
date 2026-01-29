@@ -2,20 +2,29 @@
  * Supreme AI Credit SDK - Type Definitions
  */
 
+// Organization Type
+export interface Organization {
+  id?: string;
+  name?: string;
+  slug?: string;
+  domain?: string;
+  selectedStatus?: boolean;
+  isSelected?: boolean;
+  credits?: number;
+  user_role_ids?: number[];
+  roles?: Record<string, string>;        // e.g. { "15": "orgadmin", "8": "HR" }
+  agents?: {                              // agents nested within the org
+    all?: Agent[];
+    [roleId: string]: Agent[] | any;
+  };
+}
+
 // User and Authentication Types
 export interface User {
   id: number;
   email: string;
   name?: string;
-  organizations?: Array<{
-    id?: string;
-    name?: string;
-    slug?: string;
-    domain?: string;
-    selectedStatus?: boolean;
-    credits?: number;
-    user_role_ids?: number[]
-  }>;
+  organizations?: Organization[];
   personas?: Array<{
     id: string;
     name: string;
@@ -98,6 +107,10 @@ export interface SDKState {
   user: User | null;
   balance: number;
   personas: Persona[];
+  accessToken: string | null;
+  refreshToken: string | null;
+  organizations: Organization[];
+  selectedOrganization: Organization | null;
 }
 
 // Message Types for iframe Communication
@@ -122,15 +135,7 @@ export interface TokenResponseMessage extends IframeMessage {
     organizationName: string;
     userRoleIds: number[];
   };
-  organizations?: Array<{
-    id?: string;
-    name?: string;
-    slug?: string;
-    domain?: string;
-    selectedStatus?: boolean;
-    credits?: number;
-    user_role_ids?: number[];
-  }>;
+  organizations?: Organization[];
   personas?: Array<{
     id: string;
     name: string;
@@ -168,15 +173,7 @@ export interface UserOrgsRequestMessage extends IframeMessage {
 
 export interface UserOrgsResponseMessage extends IframeMessage {
   type: 'RESPONSE_USER_ORGS';
-  organizations?: Array<{
-    id?: string;
-    name?: string;
-    slug?: string;
-    domain?: string;
-    selectedStatus?: boolean;
-    credits?: number;
-    user_role_ids?: number[];
-  }>;
+  organizations?: Organization[];
   count?: number;
   error?: string;
 }
@@ -231,6 +228,9 @@ export type CreditSDKEvents = {
   'waitingForParent': void;
   'parentTimeout': void;
   'parentAuthRequired': { error: string };
+  'organizationsUpdated': { organizations: Organization[] };
+  'organizationSwitched': { previousOrgId?: string; newOrgId: string; organization: Organization };
+  'tokensUpdated': { accessToken: string; refreshToken?: string };
 };
 
 // API Response Types
@@ -284,15 +284,7 @@ export interface HistoryResult extends OperationResult {
 }
 
 export interface UserOrgsResult extends OperationResult {
-  organizations?: Array<{
-    id?: string;
-    name?: string;
-    slug?: string;
-    domain?: string;
-    selectedStatus?: boolean;
-    credits?: number;
-    user_role_ids?: number[];
-  }>;
+  organizations?: Organization[];
   count?: number;
 }
 
@@ -307,6 +299,14 @@ export interface UserPersonasResult extends OperationResult {
   count?: number;
 }
 
+// Switch Organization Result
+export interface SwitchOrgResult {
+  success: boolean;
+  error?: string;
+  previousOrgId?: string;
+  newOrgId?: string;
+}
+
 // React Hook Types
 export interface UseCreditSystemReturn {
   isInitialized: boolean;
@@ -317,6 +317,10 @@ export interface UseCreditSystemReturn {
   personas: Persona[];
   loading: boolean;
   error: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  organizations: Organization[];
+  selectedOrganization: Organization | null;
   login: (email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   checkBalance: () => Promise<BalanceResult>;
@@ -329,6 +333,7 @@ export interface UseCreditSystemReturn {
   requestCurrentUserState: () => Promise<UserStateResult>;
   requestUserOrganizations: () => Promise<UserOrgsResult>;
   requestUserPersonas: () => Promise<UserPersonasResult>;
+  switchOrganization: (orgId: string) => Promise<SwitchOrgResult>;
 }
 
 // Persona Types

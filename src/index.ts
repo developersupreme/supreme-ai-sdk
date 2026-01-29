@@ -15,7 +15,6 @@ export type { PersonasClientConfig } from './core/PersonasClient';
 export { useCreditSystem } from './react/useCreditSystem';
 export { CreditSystemProvider, useCreditContext } from './react/CreditSystemProvider';
 export { useSwitchOrganization } from './react/useSwitchOrganization';
-export type { SwitchOrgResult } from './react/useSwitchOrganization';
 
 // Parent integration exports
 export { ParentIntegrator } from './parent/ParentIntegrator';
@@ -25,6 +24,7 @@ export type { ParentConfig } from './parent/ParentIntegrator';
 export type {
   // User and Auth
   User,
+  Organization,
   AuthTokens,
   AuthResult,
 
@@ -59,6 +59,7 @@ export type {
   SpendResult,
   AddResult,
   HistoryResult,
+  SwitchOrgResult,
 
   // Personas
   Persona,

@@ -7,6 +7,7 @@ import { CreditSystemClient } from '../core/CreditSystemClient';
 import type {
   CreditSDKConfig,
   User,
+  Organization,
   AuthResult,
   BalanceResult,
   SpendResult,
@@ -19,7 +20,8 @@ import type {
   PersonaResult,
   UserStateResult,
   UserOrgsResult,
-  UserPersonasResult
+  UserPersonasResult,
+  SwitchOrgResult
 } from '../types';
 
 export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn {
@@ -33,6 +35,10 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
 
   // Initialize client
   useEffect(() => {
@@ -51,6 +57,12 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
         setUser(data.user);
         setMode(data.mode as 'embedded' | 'standalone');
         setLoading(false);
+        // Sync new state fields from client
+        const state = client.getState();
+        setAccessToken(state.accessToken);
+        setRefreshToken(state.refreshToken);
+        setOrganizations(state.organizations);
+        setSelectedOrganization(state.selectedOrganization);
       }
     });
 
@@ -70,6 +82,12 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
         setIsAuthenticated(true);
         setUser(data.user);
         setError(null);
+        // Sync new state fields from client
+        const state = client.getState();
+        setAccessToken(state.accessToken);
+        setRefreshToken(state.refreshToken);
+        setOrganizations(state.organizations);
+        setSelectedOrganization(state.selectedOrganization);
       }
     });
 
@@ -83,6 +101,10 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
       setIsAuthenticated(false);
       setUser(null);
       setBalance(null);
+      setAccessToken(null);
+      setRefreshToken(null);
+      setOrganizations([]);
+      setSelectedOrganization(null);
     });
 
     client.on('balanceUpdate', (data) => {
@@ -121,6 +143,32 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
       // Only set to false when token actually expires (refresh failed)
       setIsAuthenticated(false);
       setError('Session expired. Please login again.');
+    });
+
+    client.on('tokensUpdated', (data) => {
+      if (data) {
+        setAccessToken(data.accessToken);
+        if (data.refreshToken) {
+          setRefreshToken(data.refreshToken);
+        }
+      }
+    });
+
+    client.on('organizationsUpdated', (data) => {
+      if (data) {
+        setOrganizations(data.organizations);
+        const selected = data.organizations.find(o => o.selectedStatus || o.isSelected) || null;
+        setSelectedOrganization(selected);
+      }
+    });
+
+    client.on('organizationSwitched', (data) => {
+      if (data) {
+        setSelectedOrganization(data.organization);
+        // Re-derive full list from client state
+        const state = client.getState();
+        setOrganizations(state.organizations);
+      }
     });
 
     // Cleanup
@@ -253,6 +301,15 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     return await clientRef.current.requestUserPersonas();
   }, []);
 
+  // Switch organization
+  const switchOrganization = useCallback(async (orgId: string): Promise<SwitchOrgResult> => {
+    if (!clientRef.current) {
+      return { success: false, error: 'Client not initialized' };
+    }
+
+    return await clientRef.current.switchOrganization(orgId);
+  }, []);
+
   return {
     isInitialized,
     isAuthenticated,
@@ -262,6 +319,10 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     personas,
     loading,
     error,
+    accessToken,
+    refreshToken,
+    organizations,
+    selectedOrganization,
     login,
     logout,
     checkBalance,
@@ -273,6 +334,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     getPersonaById,
     requestCurrentUserState,
     requestUserOrganizations,
-    requestUserPersonas
+    requestUserPersonas,
+    switchOrganization
   };
 }

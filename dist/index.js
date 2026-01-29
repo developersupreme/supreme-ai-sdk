@@ -793,7 +793,11 @@ var CreditSystemClient = class extends EventEmitter {
       isAuthenticated: false,
       user: null,
       balance: 0,
-      personas: []
+      personas: [],
+      accessToken: null,
+      refreshToken: null,
+      organizations: [],
+      selectedOrganization: null
     };
     this.storage = new StorageManager(this.config.storagePrefix, this.config.debug);
     this.messageBridge = new MessageBridge(this.config.allowedOrigins, this.config.debug);
@@ -918,6 +922,28 @@ var CreditSystemClient = class extends EventEmitter {
       }
       this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
+      this.state.accessToken = data.token || null;
+      this.state.refreshToken = data.refreshToken || null;
+      const orgs = data.organizations || enrichedUser?.organizations;
+      if (orgs && Array.isArray(orgs)) {
+        const normalizedOrgs = orgs.map((org, index) => {
+          const selected = org.isSelected ?? org.selectedStatus ?? index === 0;
+          const userRoleIds = org.user_role_ids ?? (org.roles ? Object.keys(org.roles).map(Number) : void 0);
+          return {
+            ...org,
+            selectedStatus: selected,
+            isSelected: selected,
+            ...userRoleIds ? { user_role_ids: userRoleIds } : {}
+          };
+        });
+        this.state.organizations = normalizedOrgs;
+        this.state.selectedOrganization = normalizedOrgs.find((o) => o.selectedStatus) || normalizedOrgs[0] || null;
+        this.emit("organizationsUpdated", { organizations: normalizedOrgs });
+      }
+      this.emit("tokensUpdated", {
+        accessToken: data.token,
+        refreshToken: data.refreshToken
+      });
       this.log("\u{1F680} Initializing with token...");
       this.initializeWithToken();
       this.log("\u{1F4E4} Sending CREDIT_SYSTEM_READY to parent");
@@ -948,6 +974,14 @@ var CreditSystemClient = class extends EventEmitter {
         this.log("\u2705 Token is valid!");
         this.state.user = savedAuth.user;
         this.state.isAuthenticated = true;
+        this.state.accessToken = savedAuth.token;
+        this.state.refreshToken = savedAuth.refreshToken || null;
+        if (savedAuth.user?.organizations && Array.isArray(savedAuth.user.organizations)) {
+          this.state.organizations = savedAuth.user.organizations;
+          this.state.selectedOrganization = savedAuth.user.organizations.find(
+            (o) => o.selectedStatus || o.isSelected
+          ) || savedAuth.user.organizations[0] || null;
+        }
         this.log("\u{1F680} Initializing with valid token...");
         this.initializeWithToken();
       } else {
@@ -1027,6 +1061,38 @@ var CreditSystemClient = class extends EventEmitter {
         this.log("\u{1F4BE} Tokens saved to storage");
         this.state.user = result.user;
         this.state.isAuthenticated = true;
+        this.state.accessToken = result.tokens.access_token;
+        this.state.refreshToken = result.tokens.refresh_token;
+        if (result.user.organizations && Array.isArray(result.user.organizations)) {
+          this.log("\u{1F4E6} Raw orgs from API:", result.user.organizations.map((o) => ({
+            id: o.id,
+            name: o.name,
+            hasAgents: !!o.agents,
+            hasRoles: !!o.roles,
+            isSelected: o.isSelected
+          })));
+          const orgs = result.user.organizations.map((org, index) => {
+            const selected = org.isSelected ?? org.selectedStatus ?? index === 0;
+            const userRoleIds = org.user_role_ids ?? (org.roles ? Object.keys(org.roles).map(Number) : void 0);
+            return {
+              ...org,
+              selectedStatus: selected,
+              isSelected: selected,
+              ...userRoleIds ? { user_role_ids: userRoleIds } : {}
+            };
+          });
+          this.state.organizations = orgs;
+          this.state.selectedOrganization = orgs.find((o) => o.selectedStatus) || orgs[0] || null;
+          this.emit("organizationsUpdated", { organizations: orgs });
+          this.log(`\u{1F3E2} Stored ${orgs.length} organizations. Selected: ${this.state.selectedOrganization?.name} (ID: ${this.state.selectedOrganization?.id})`);
+          if (this.state.selectedOrganization?.agents?.all) {
+            this.log(`\u{1F916} Selected org has ${this.state.selectedOrganization.agents.all.length} agents`);
+          }
+        }
+        this.emit("tokensUpdated", {
+          accessToken: result.tokens.access_token,
+          refreshToken: result.tokens.refresh_token
+        });
         this.log("\u{1F680} Initializing with token...");
         this.initializeWithToken();
         this.emit("loginSuccess", { user: result.user });
@@ -1061,6 +1127,10 @@ var CreditSystemClient = class extends EventEmitter {
     this.state.balance = 0;
     this.state.isInitialized = false;
     this.state.isAuthenticated = false;
+    this.state.accessToken = null;
+    this.state.refreshToken = null;
+    this.state.organizations = [];
+    this.state.selectedOrganization = null;
     this.storage.remove("auth");
     this.clearTimers();
     if (this.state.mode === "embedded") {
@@ -1079,12 +1149,10 @@ var CreditSystemClient = class extends EventEmitter {
       return { success: false, error: "Not authenticated" };
     }
     this.log("\u{1F4B0} Fetching current balance...");
-    this.log("\u{1F464} Current user state:", this.state.user);
+    this.log(`\u{1F464} User: ${this.state.user?.email} (ID: ${this.state.user?.id})`);
     try {
       const params = {};
-      const organizations = this.state.user?.organizations;
-      const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
-      const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+      const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
       this.log(`\u{1F50D} Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
       if (organizationId) {
         params.organization_id = String(organizationId);
@@ -1164,24 +1232,22 @@ var CreditSystemClient = class extends EventEmitter {
       this.log(`\u26A0\uFE0F Spend credits blocked: Insufficient credits (need ${amount}, have ${this.state.balance})`);
       return { success: false, error: "Insufficient credits" };
     }
-    if (this.config.debug) this.log("\u{1F464} Current user state:", this.state.user);
+    if (this.config.debug) this.log(`\u{1F464} User: ${this.state.user?.email} (ID: ${this.state.user?.id})`);
     const userId = this.state.user?.id;
     if (!userId) {
       this.log("\u26A0\uFE0F Spend credits blocked: User ID not found");
       return { success: false, error: "User ID not found" };
     }
-    const organizations = this.state.user?.organizations;
-    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id;
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
     if (this.config.debug) this.log("organizationId", organizationId);
     if (!organizationId) {
       this.log("\u26A0\uFE0F Spend credits blocked: No selected organization found");
       return { success: false, error: "No selected organization found" };
     }
-    const userRoleId = selectedOrg?.user_role_ids?.[0];
+    const userRoleId = this.state.selectedOrganization?.user_role_ids?.[0];
     this.log(`\u{1F4B3} Spending ${amount} credits...`);
     this.log(`\u{1F464} User ID: ${userId}`);
-    this.log(`\u{1F3E2} Organization ID: ${organizationId} (${selectedOrg.name})`);
+    this.log(`\u{1F3E2} Organization ID: ${organizationId} (${this.state.selectedOrganization?.name || "from cookie"})`);
     if (userRoleId) this.log(`\u{1F511} User Role ID: ${userRoleId}`);
     if (description) this.log(`\u{1F4DD} Description: ${description}`);
     if (referenceId) this.log(`\u{1F517} Reference ID: ${referenceId}`);
@@ -1250,17 +1316,15 @@ var CreditSystemClient = class extends EventEmitter {
       this.log("\u26A0\uFE0F Add credits blocked: User ID not found");
       return { success: false, error: "User ID not found" };
     }
-    const organizations = this.state.user?.organizations;
-    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id;
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
     if (!organizationId) {
       this.log("\u26A0\uFE0F Add credits blocked: No selected organization found");
       return { success: false, error: "No selected organization found" };
     }
-    const userRoleId = selectedOrg?.user_role_ids?.[0];
+    const userRoleId = this.state.selectedOrganization?.user_role_ids?.[0];
     this.log(`\u2795 Adding ${amount} credits...`);
     this.log(`\u{1F464} User ID: ${userId}`);
-    this.log(`\u{1F3E2} Organization ID: ${organizationId} (${selectedOrg.name})`);
+    this.log(`\u{1F3E2} Organization ID: ${organizationId} (${this.state.selectedOrganization?.name || "from cookie"})`);
     if (userRoleId) this.log(`\u{1F511} User Role ID: ${userRoleId}`);
     if (description) this.log(`\u{1F4DD} Description: ${description}`);
     this.log(`\u{1F3F7}\uFE0F Type: ${type}`);
@@ -1317,9 +1381,7 @@ var CreditSystemClient = class extends EventEmitter {
     if (!this.state.isAuthenticated) {
       return { success: false, error: "Not authenticated" };
     }
-    const organizations = this.state.user?.organizations;
-    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id;
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
     if (!organizationId) {
       this.log("\u26A0\uFE0F Get history blocked: No selected organization found");
       return { success: false, error: "No organization selected" };
@@ -1368,9 +1430,7 @@ var CreditSystemClient = class extends EventEmitter {
     if (!this.state.isAuthenticated) {
       return { success: false, error: "Not authenticated" };
     }
-    const organizations = this.state.user?.organizations;
-    const selectedOrg = organizations?.find((org) => org.selectedStatus === true);
-    const organizationId = selectedOrg?.id || this.getOrganizationIdFromCookie();
+    const organizationId = this.state.selectedOrganization?.id || this.getOrganizationIdFromCookie();
     this.log(`\u{1F50D} Organization ID (selected org or cookie): ${organizationId} (type: ${typeof organizationId})`);
     if (!organizationId) {
       this.log("\u26A0\uFE0F Get agents blocked: No selected organization found");
@@ -1381,7 +1441,7 @@ var CreditSystemClient = class extends EventEmitter {
       queryParams += "&all=true";
       this.log(`\u{1F916} Fetching all AI agents for organization ${organizationId}...`);
     } else {
-      const roleIds = selectedOrg?.user_role_ids || this.state.user?.userRoleIds;
+      const roleIds = this.state.selectedOrganization?.user_role_ids || this.state.user?.userRoleIds;
       if (!roleIds || roleIds.length === 0) {
         this.log("\u26A0\uFE0F Get agents blocked: No role IDs found for user in selected organization");
         return { success: false, error: "No role IDs found for user" };
@@ -1641,6 +1701,11 @@ var CreditSystemClient = class extends EventEmitter {
               user: updatedUser
             });
             this.state.user = updatedUser;
+            this.state.organizations = updatedOrganizations;
+            this.state.selectedOrganization = updatedOrganizations.find(
+              (org) => org.selectedStatus
+            ) || null;
+            this.emit("organizationsUpdated", { organizations: updatedOrganizations });
             if (data.userState.personas) {
               this.state.personas = data.userState.personas;
             }
@@ -1848,7 +1913,15 @@ var CreditSystemClient = class extends EventEmitter {
         this.log(`   \u2022 Access Token:  UPDATED \u2713`);
         this.log(`   \u2022 Refresh Token: ${hasNewRefreshToken ? "UPDATED \u2713" : "PRESERVED \u2713"}`);
         this.log(`   \u2022 User Data:     PRESERVED \u2713`);
+        this.state.accessToken = result.tokens.access_token;
+        if (hasNewRefreshToken) {
+          this.state.refreshToken = result.tokens.refresh_token;
+        }
         this.emit("tokenRefreshed");
+        this.emit("tokensUpdated", {
+          accessToken: result.tokens.access_token,
+          refreshToken: newRefreshToken
+        });
         if (this.state.mode === "embedded") {
           this.log("\u{1F4E4} Sending JWT_TOKEN_REFRESHED to parent");
           this.messageBridge.sendToParent("JWT_TOKEN_REFRESHED", {
@@ -1935,6 +2008,71 @@ var CreditSystemClient = class extends EventEmitter {
     }
   }
   /**
+   * Switch to a different organization
+   */
+  async switchOrganization(orgId) {
+    this.log(`\u{1F504} switchOrganization called with orgId: ${orgId} (type: ${typeof orgId})`);
+    if (!this.state.isAuthenticated || !this.state.user) {
+      this.log("\u274C switchOrganization: User not authenticated");
+      return { success: false, error: "User not authenticated" };
+    }
+    this.log(`\u{1F4CB} SDK has ${this.state.organizations.length} organizations in state`);
+    if (this.state.organizations.length > 0) {
+      this.log("\u{1F4CB} Organization IDs in SDK state:", this.state.organizations.map((o) => `${o.id} (type: ${typeof o.id}, selectedStatus: ${o.selectedStatus})`));
+    }
+    if (this.state.organizations.length === 0) {
+      this.log("\u274C switchOrganization: No organizations in SDK state");
+      return { success: false, error: "No organizations found for user" };
+    }
+    const targetOrg = this.state.organizations.find((org) => String(org.id) === String(orgId));
+    if (!targetOrg) {
+      this.log(`\u274C switchOrganization: Organization with ID ${orgId} not found. Available IDs: ${this.state.organizations.map((o) => o.id).join(", ")}`);
+      return { success: false, error: `Organization with ID ${orgId} not found` };
+    }
+    const previousOrg = this.state.selectedOrganization;
+    if (String(previousOrg?.id) === String(orgId)) {
+      this.log(`\u2139\uFE0F switchOrganization: Already on org ${orgId}, no change needed`);
+      return { success: true, previousOrgId: String(orgId), newOrgId: String(orgId) };
+    }
+    const isMatch = (org) => String(org.id) === String(orgId);
+    const updatedOrgs = this.state.organizations.map((org) => ({
+      ...org,
+      selectedStatus: isMatch(org),
+      isSelected: isMatch(org)
+    }));
+    this.state.organizations = updatedOrgs;
+    this.state.selectedOrganization = updatedOrgs.find((o) => o.selectedStatus) || null;
+    if (this.state.user) {
+      this.state.user = {
+        ...this.state.user,
+        organizations: updatedOrgs
+      };
+    }
+    const auth = this.storage.get("auth");
+    if (auth) {
+      this.storage.set("auth", {
+        ...auth,
+        user: { ...auth.user, organizations: updatedOrgs }
+      });
+    }
+    const expires = /* @__PURE__ */ new Date();
+    expires.setDate(expires.getDate() + 30);
+    document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+    this.log(`\u{1F3E2} Organization switched: ${previousOrg?.name} -> ${targetOrg.name}`);
+    this.log("\u{1F4CB} Updated organizations:", updatedOrgs.map((o) => `${o.name}: selectedStatus=${o.selectedStatus}`));
+    this.emit("organizationSwitched", {
+      previousOrgId: previousOrg?.id,
+      newOrgId: orgId,
+      organization: this.state.selectedOrganization
+    });
+    this.emit("organizationsUpdated", { organizations: updatedOrgs });
+    return {
+      success: true,
+      previousOrgId: previousOrg?.id,
+      newOrgId: orgId
+    };
+  }
+  /**
    * Get current state
    */
   getState() {
@@ -1971,6 +2109,10 @@ function useCreditSystem(config) {
   const [personas, setPersonas] = (0, import_react.useState)([]);
   const [loading, setLoading] = (0, import_react.useState)(true);
   const [error, setError] = (0, import_react.useState)(null);
+  const [accessToken, setAccessToken] = (0, import_react.useState)(null);
+  const [refreshToken, setRefreshToken] = (0, import_react.useState)(null);
+  const [organizations, setOrganizations] = (0, import_react.useState)([]);
+  const [selectedOrganization, setSelectedOrganization] = (0, import_react.useState)(null);
   (0, import_react.useEffect)(() => {
     const client = new CreditSystemClient({
       ...config,
@@ -1984,6 +2126,11 @@ function useCreditSystem(config) {
         setUser(data.user);
         setMode(data.mode);
         setLoading(false);
+        const state = client.getState();
+        setAccessToken(state.accessToken);
+        setRefreshToken(state.refreshToken);
+        setOrganizations(state.organizations);
+        setSelectedOrganization(state.selectedOrganization);
       }
     });
     client.on("modeDetected", (data) => {
@@ -2000,6 +2147,11 @@ function useCreditSystem(config) {
         setIsAuthenticated(true);
         setUser(data.user);
         setError(null);
+        const state = client.getState();
+        setAccessToken(state.accessToken);
+        setRefreshToken(state.refreshToken);
+        setOrganizations(state.organizations);
+        setSelectedOrganization(state.selectedOrganization);
       }
     });
     client.on("loginError", (data) => {
@@ -2011,6 +2163,10 @@ function useCreditSystem(config) {
       setIsAuthenticated(false);
       setUser(null);
       setBalance(null);
+      setAccessToken(null);
+      setRefreshToken(null);
+      setOrganizations([]);
+      setSelectedOrganization(null);
     });
     client.on("balanceUpdate", (data) => {
       if (data) {
@@ -2040,6 +2196,28 @@ function useCreditSystem(config) {
     client.on("tokenExpired", () => {
       setIsAuthenticated(false);
       setError("Session expired. Please login again.");
+    });
+    client.on("tokensUpdated", (data) => {
+      if (data) {
+        setAccessToken(data.accessToken);
+        if (data.refreshToken) {
+          setRefreshToken(data.refreshToken);
+        }
+      }
+    });
+    client.on("organizationsUpdated", (data) => {
+      if (data) {
+        setOrganizations(data.organizations);
+        const selected = data.organizations.find((o) => o.selectedStatus || o.isSelected) || null;
+        setSelectedOrganization(selected);
+      }
+    });
+    client.on("organizationSwitched", (data) => {
+      if (data) {
+        setSelectedOrganization(data.organization);
+        const state = client.getState();
+        setOrganizations(state.organizations);
+      }
     });
     return () => {
       client.destroy();
@@ -2120,6 +2298,12 @@ function useCreditSystem(config) {
     }
     return await clientRef.current.requestUserPersonas();
   }, []);
+  const switchOrganization = (0, import_react.useCallback)(async (orgId) => {
+    if (!clientRef.current) {
+      return { success: false, error: "Client not initialized" };
+    }
+    return await clientRef.current.switchOrganization(orgId);
+  }, []);
   return {
     isInitialized,
     isAuthenticated,
@@ -2129,6 +2313,10 @@ function useCreditSystem(config) {
     personas,
     loading,
     error,
+    accessToken,
+    refreshToken,
+    organizations,
+    selectedOrganization,
     login,
     logout,
     checkBalance,
@@ -2140,7 +2328,8 @@ function useCreditSystem(config) {
     getPersonaById,
     requestCurrentUserState,
     requestUserOrganizations,
-    requestUserPersonas
+    requestUserPersonas,
+    switchOrganization
   };
 }
 
@@ -2166,91 +2355,7 @@ function useSwitchOrganization() {
   const creditSystem = useCreditContext();
   const switchOrganization = (0, import_react3.useCallback)(
     async (orgId) => {
-      try {
-        if (!creditSystem.isAuthenticated || !creditSystem.user) {
-          return {
-            success: false,
-            error: "User not authenticated"
-          };
-        }
-        const organizations = creditSystem.user.organizations;
-        if (!organizations || organizations.length === 0) {
-          return {
-            success: false,
-            error: "No organizations found for user"
-          };
-        }
-        const targetOrg = organizations.find((org) => org.id === orgId);
-        if (!targetOrg) {
-          return {
-            success: false,
-            error: `Organization with ID ${orgId} not found`
-          };
-        }
-        const previousOrg = organizations.find((org) => org.selectedStatus === true);
-        const previousOrgId = previousOrg?.id;
-        if (previousOrgId === orgId) {
-          return {
-            success: true,
-            previousOrgId: orgId,
-            newOrgId: orgId,
-            error: "Organization already selected"
-          };
-        }
-        const updatedOrganizations = organizations.map((org) => ({
-          ...org,
-          selectedStatus: org.id === orgId
-        }));
-        const storagePrefix = "creditSystem_";
-        const authKey = storagePrefix + "auth";
-        let authData;
-        try {
-          const storedAuth = sessionStorage.getItem(authKey);
-          authData = storedAuth ? JSON.parse(storedAuth) : null;
-        } catch (error) {
-          return {
-            success: false,
-            error: "Failed to read authentication data from storage"
-          };
-        }
-        if (!authData || !authData.user) {
-          return {
-            success: false,
-            error: "Authentication data not found in storage"
-          };
-        }
-        const updatedUser = {
-          ...authData.user,
-          organizations: updatedOrganizations
-        };
-        try {
-          sessionStorage.setItem(authKey, JSON.stringify({
-            ...authData,
-            user: updatedUser
-          }));
-        } catch (error) {
-          return {
-            success: false,
-            error: "Failed to update storage with new organization selection"
-          };
-        }
-        const expires = /* @__PURE__ */ new Date();
-        expires.setDate(expires.getDate() + 30);
-        document.cookie = `user-selected-org-id=${orgId};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
-        if (creditSystem.user) {
-          creditSystem.user.organizations = updatedOrganizations;
-        }
-        return {
-          success: true,
-          previousOrgId,
-          newOrgId: orgId
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error.message || "Failed to switch organization"
-        };
-      }
+      return creditSystem.switchOrganization(orgId);
     },
     [creditSystem]
   );
