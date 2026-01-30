@@ -29,6 +29,7 @@
     -   [Standalone Mode Implementation](#4-standalone-mode-implementation)
     -   [Embedded Mode Implementation](#5-embedded-mode-implementation)
     -   [SDK Methods Reference](#6-sdk-methods-reference)
+        -   [Organization Management (switchOrganization)](#organization-management)
 
 ### 🔷 Credit System SDK
 
@@ -1151,6 +1152,72 @@ if (result.success) {
 await logout();
 ```
 
+#### Organization Management
+
+| Method | Description | Parameters | Returns |
+| --- | --- | --- | --- |
+| `switchOrganization(orgId)` | Switch the active organization | `orgId: string` | `Promise<SwitchOrgResult>` |
+
+In **standalone mode**, `switchOrganization` returns enriched data — the updated organizations list, balance, transaction history, and agents for the new org — all in a single call. In **embedded mode**, it returns only `{ success, previousOrgId, newOrgId }` and the component refreshes data manually.
+
+**Usage:**
+
+```typescript
+const { switchOrganization } = useSimpleCreditSystem();
+
+const result = await switchOrganization("2");
+
+if (!result.success) {
+    console.error("Switch failed:", result.error);
+    return;
+}
+
+// Standalone mode: SDK returns all refreshed data
+if (result.organizations) {
+    console.log("Orgs:", result.organizations);
+    console.log("Balance:", result.balance);
+    console.log("History:", result.history?.transactions);
+    console.log("Agents:", result.agents?.all);
+
+    if (result.refreshErrors) {
+        // Partial failures — org switch succeeded but some data failed to load
+        console.warn("Refresh errors:", result.refreshErrors);
+    }
+    return;
+}
+
+// Embedded mode: minimal result, refresh data manually
+await checkBalance();
+await getHistory(1, 10);
+await getAgents();
+```
+
+**`SwitchOrgResult` type (standalone mode fields):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | `boolean` | Whether the org switch succeeded |
+| `error` | `string?` | Error message if switch failed |
+| `previousOrgId` | `string?` | ID of the previously active org |
+| `newOrgId` | `string?` | ID of the newly active org |
+| `organizations` | `Organization[]?` | Updated organizations list with `isSelected` flags (standalone only) |
+| `balance` | `number?` | Credit balance for the new org (standalone only) |
+| `history` | `object?` | Transaction history page 1 for the new org (standalone only) |
+| `history.transactions` | `Transaction[]` | Transaction records |
+| `history.total` | `number` | Total transaction count |
+| `history.page` | `number` | Current page number |
+| `history.pages` | `number` | Total pages available |
+| `agents` | `object?` | Agents for the new org (standalone only) |
+| `agents.all` | `Agent[]` | All agents (unfiltered) |
+| `agents.filtered` | `Agent[]` | Agents filtered by user roles |
+| `agents.roleGrouped` | `Record<string, { role_name: string; agents: Agent[] }>` | Agents grouped by role |
+| `refreshErrors` | `object?` | Per-resource errors if any refresh failed (standalone only) |
+| `refreshErrors.balance` | `string?` | Balance fetch error |
+| `refreshErrors.history` | `string?` | History fetch error |
+| `refreshErrors.agents` | `string?` | Agents fetch error |
+
+> **Note:** In standalone mode, the org switch itself (`success: true`) is independent of data refresh. If balance or history fails to load, `success` is still `true` and the errors appear in `refreshErrors`.
+
 #### Credit Operations
 
 | Method           | Description                 | Parameters                                                             | Returns                    |
@@ -2167,21 +2234,95 @@ Content-Type: application/json
 ```json
 {
     "success": true,
+    "message": "Authentication successful",
     "data": {
         "user": {
-            "id": 123,
-            "email": "user@example.com",
-            "name": "John Doe"
+            "id": 19,
+            "name": "Supreme Developer",
+            "email": "developer+superadmin@supremeopti.com",
+            "organizations": [
+                {
+                    "id": 1,
+                    "name": "Supreme Optimization",
+                    "roles": {
+                        "15": "orgadmin"
+                    },
+                    "agents": {
+                        "all": [
+                            {
+                                "id": 13,
+                                "assistant_id": "0578eff1-9366-4dfa-b95d-a332e9d3b763",
+                                "name": "Supreme Intelligence MLR Agent",
+                                "description": "MLR Agent description...",
+                                "short_desc": "MLR Agent short description..."
+                            }
+                        ]
+                    },
+                    "isSelected": true
+                },
+                {
+                    "id": 2,
+                    "name": "Kadiko",
+                    "roles": {
+                        "8": "HR",
+                        "16": "orgadmin"
+                    },
+                    "agents": {
+                        "all": [
+                            {
+                                "id": 13,
+                                "assistant_id": "0578eff1-9366-4dfa-b95d-a332e9d3b763",
+                                "name": "Supreme Intelligence MLR Agent",
+                                "description": "MLR Agent description...",
+                                "short_desc": "MLR Agent short description..."
+                            },
+                            {
+                                "id": 15,
+                                "assistant_id": "d9cb1959-24f1-4577-b066-c2af38fbf59f",
+                                "name": "Clinical Research Agent",
+                                "description": "Clinical Research Agent description...",
+                                "short_desc": "AI agent with real-time access to PubMed, ClinicalTrials.gov, OpenFDA, and 20+ databases."
+                            }
+                        ]
+                    },
+                    "isSelected": false
+                }
+            ]
         },
         "tokens": {
             "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "token_type": "Bearer",
-            "expires_in": 900
-        }
+            "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+        },
+        "expires_in": 900
     }
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | `boolean` | Whether authentication succeeded |
+| `message` | `string` | Human-readable status message |
+| `data.user.id` | `number` | User's unique identifier |
+| `data.user.name` | `string` | User's display name |
+| `data.user.email` | `string` | User's email address |
+| `data.user.organizations` | `array` | All organizations the user belongs to |
+| `data.user.organizations[].id` | `number` | Organization ID |
+| `data.user.organizations[].name` | `string` | Organization name |
+| `data.user.organizations[].roles` | `object` | Mapping of role ID to role name (e.g. `{"15": "orgadmin"}`) |
+| `data.user.organizations[].agents.all` | `array` | All agents available in this organization |
+| `data.user.organizations[].agents.all[].id` | `number` | Agent ID |
+| `data.user.organizations[].agents.all[].assistant_id` | `string` | UUID of the underlying assistant |
+| `data.user.organizations[].agents.all[].name` | `string` | Agent display name |
+| `data.user.organizations[].agents.all[].description` | `string` | Full agent description (may contain HTML) |
+| `data.user.organizations[].agents.all[].short_desc` | `string\|null` | Short description (plain text) |
+| `data.user.organizations[].isSelected` | `boolean` | `true` if this is the user's currently active organization |
+| `data.tokens.access_token` | `string` | JWT access token for API authentication |
+| `data.tokens.refresh_token` | `string` | JWT refresh token for obtaining new access tokens |
+| `data.expires_in` | `number` | Access token lifetime in seconds (default: 900) |
+
+> **Note:** The login response includes each organization's agents inline. This allows the app to display org-specific agents immediately after login without a separate API call.
 
 #### 2. Generate JWT from Session (Embedded Mode)
 
