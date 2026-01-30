@@ -269,6 +269,27 @@ interface SwitchOrgResult {
     error?: string;
     previousOrgId?: string;
     newOrgId?: string;
+    organizations?: Organization[];
+    balance?: number;
+    history?: {
+        transactions: Transaction[];
+        total: number;
+        page: number;
+        pages: number;
+    };
+    agents?: {
+        all: Agent[];
+        filtered: Agent[];
+        roleGrouped: Record<string, {
+            role_name: string;
+            agents: Agent[];
+        }>;
+    };
+    refreshErrors?: {
+        balance?: string;
+        history?: string;
+        agents?: string;
+    };
 }
 interface UseCreditSystemReturn {
     isInitialized: boolean;

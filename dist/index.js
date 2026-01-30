@@ -2066,6 +2066,53 @@ var CreditSystemClient = class extends EventEmitter {
       organization: this.state.selectedOrganization
     });
     this.emit("organizationsUpdated", { organizations: updatedOrgs });
+    if (this.state.mode === "standalone") {
+      const result = {
+        success: true,
+        previousOrgId: previousOrg?.id,
+        newOrgId: orgId,
+        organizations: updatedOrgs,
+        refreshErrors: {}
+      };
+      try {
+        const br = await this.checkBalance();
+        if (br.success) result.balance = br.balance;
+        else result.refreshErrors.balance = br.error || "Failed";
+      } catch (e) {
+        result.refreshErrors.balance = e.message;
+      }
+      try {
+        const hr = await this.getHistory(1, 10);
+        if (hr.success) {
+          result.history = {
+            transactions: hr.transactions || [],
+            total: hr.total || 0,
+            page: hr.page || 1,
+            pages: hr.pages || 1
+          };
+        } else result.refreshErrors.history = hr.error || "Failed";
+      } catch (e) {
+        result.refreshErrors.history = e.message;
+      }
+      try {
+        const [allRes, filtRes] = await Promise.all([
+          this.getAgents(true),
+          this.getAgents(false)
+        ]);
+        result.agents = {
+          all: allRes.success && allRes.agents ? allRes.agents : [],
+          filtered: filtRes.success && filtRes.agents ? filtRes.agents : [],
+          roleGrouped: filtRes.success && filtRes.roleGrouped ? filtRes.roleGrouped : {}
+        };
+        if (!allRes.success) result.refreshErrors.agents = allRes.error;
+        if (!filtRes.success) result.refreshErrors.agents = (result.refreshErrors.agents || "") + "; " + filtRes.error;
+      } catch (e) {
+        result.refreshErrors.agents = e.message;
+        result.agents = { all: [], filtered: [], roleGrouped: {} };
+      }
+      if (Object.keys(result.refreshErrors).length === 0) delete result.refreshErrors;
+      return result;
+    }
     return {
       success: true,
       previousOrgId: previousOrg?.id,
