@@ -8,6 +8,7 @@ export interface Organization {
   name?: string;
   slug?: string;
   domain?: string;
+  drive_folder_id?: string | null;
   selectedStatus?: boolean;
   isSelected?: boolean;
   credits?: number;
@@ -158,6 +159,7 @@ export interface UserStateResponseMessage extends IframeMessage {
     orgName: string;
     orgSlug?: string;
     orgDomain?: string;
+    driveFolderId?: string | null;
     userRole: string;
     userId: string;
     userRoleIds?: number[]; // Array of role IDs (for consistency with JWT token response)
@@ -381,6 +383,7 @@ export interface UserStateResult extends OperationResult {
     orgName: string;
     orgSlug?: string;
     orgDomain?: string;
+    driveFolderId?: string | null;
     userRole: string;
     userId: string;
     userRoleIds?: number[];
