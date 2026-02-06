@@ -1731,14 +1731,16 @@ function MyComponent() {
       assistant_id: "4dd46d71-8690-49ef-9b3a-5042d33034fa",
       name: "OpenKAI MLR Agent",
       description: "OpenKAI MLR Agent",
-      short_desc: null
+      short_desc: null,
+      is_default: false
     },
     {
       id: 18,
       assistant_id: "c77f12e6-7333-43bc-8551-b50d277e59f0",
       name: "PHC Main Agent",
       description: null,
-      short_desc: "Custom AI supporting PHCbi projects..."
+      short_desc: "Custom AI supporting PHCbi projects...",
+      is_default: false
     }
   ],
   total: 2
