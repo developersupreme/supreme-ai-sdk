@@ -1162,6 +1162,9 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
           if (data.userState.orgDomain) {
             this.log(`🌐 Organization Domain: ${data.userState.orgDomain}`);
           }
+          if (data.userState.driveFolderId) {
+            this.log(`📁 Drive Folder ID: ${data.userState.driveFolderId}`);
+          }
           this.log(`👤 User ID: ${data.userState.userId}`);
           this.log(`🎭 User Role: ${data.userState.userRole}`);
           if (data.userState.userRoleIds) {
@@ -1193,6 +1196,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
                   name: data.userState.orgName,
                   slug: data.userState.orgSlug,
                   domain: data.userState.orgDomain,
+                  drive_folder_id: data.userState.driveFolderId,
                   selectedStatus: true,
                   user_role_ids: data.userState.userRoleIds || updatedOrganizations[orgIndex].user_role_ids
                 };
@@ -1203,6 +1207,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
                   name: data.userState.orgName,
                   slug: data.userState.orgSlug,
                   domain: data.userState.orgDomain,
+                  drive_folder_id: data.userState.driveFolderId,
                   selectedStatus: true,
                   user_role_ids: data.userState.userRoleIds
                 });

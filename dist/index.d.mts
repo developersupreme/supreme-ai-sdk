@@ -9,6 +9,7 @@ interface Organization {
     name?: string;
     slug?: string;
     domain?: string;
+    drive_folder_id?: string | null;
     selectedStatus?: boolean;
     isSelected?: boolean;
     credits?: number;
@@ -140,6 +141,7 @@ interface UserStateResponseMessage extends IframeMessage {
         orgName: string;
         orgSlug?: string;
         orgDomain?: string;
+        driveFolderId?: string | null;
         userRole: string;
         userId: string;
         userRoleIds?: number[];
@@ -339,6 +341,7 @@ interface UserStateResult extends OperationResult {
         orgName: string;
         orgSlug?: string;
         orgDomain?: string;
+        driveFolderId?: string | null;
         userRole: string;
         userId: string;
         userRoleIds?: number[];
