@@ -1657,6 +1657,9 @@ var CreditSystemClient = class extends EventEmitter {
           if (data.userState.orgDomain) {
             this.log(`\u{1F310} Organization Domain: ${data.userState.orgDomain}`);
           }
+          if (data.userState.driveFolderId) {
+            this.log(`\u{1F4C1} Drive Folder ID: ${data.userState.driveFolderId}`);
+          }
           this.log(`\u{1F464} User ID: ${data.userState.userId}`);
           this.log(`\u{1F3AD} User Role: ${data.userState.userRole}`);
           if (data.userState.userRoleIds) {
@@ -1681,6 +1684,7 @@ var CreditSystemClient = class extends EventEmitter {
                   name: data.userState.orgName,
                   slug: data.userState.orgSlug,
                   domain: data.userState.orgDomain,
+                  drive_folder_id: data.userState.driveFolderId,
                   selectedStatus: true,
                   user_role_ids: data.userState.userRoleIds || updatedOrganizations[orgIndex].user_role_ids
                 };
@@ -1690,6 +1694,7 @@ var CreditSystemClient = class extends EventEmitter {
                   name: data.userState.orgName,
                   slug: data.userState.orgSlug,
                   domain: data.userState.orgDomain,
+                  drive_folder_id: data.userState.driveFolderId,
                   selectedStatus: true,
                   user_role_ids: data.userState.userRoleIds
                 });
