@@ -23,6 +23,7 @@ interface User {
     id: number;
     email: string;
     name?: string;
+    is_superadmin?: boolean;
     organizations?: Organization[];
     personas?: Array<{
         id: string;
@@ -92,6 +93,7 @@ interface SDKState {
     isInIframe: boolean;
     isInitialized: boolean;
     isAuthenticated: boolean;
+    isSuperAdmin: boolean;
     user: User | null;
     balance: number;
     personas: Persona[];
@@ -114,6 +116,7 @@ interface TokenResponseMessage extends IframeMessage {
     token?: string;
     refreshToken?: string;
     user?: User;
+    isSuperAdmin?: boolean;
     organization?: {
         organizationId: string;
         organizationName: string;
@@ -143,6 +146,7 @@ interface UserStateResponseMessage extends IframeMessage {
         userRole: string;
         userId: string;
         userRoleIds?: number[];
+        isSuperAdmin?: boolean;
         personas?: any[];
     };
     error?: string;
@@ -294,6 +298,7 @@ interface SwitchOrgResult {
 interface UseCreditSystemReturn {
     isInitialized: boolean;
     isAuthenticated: boolean;
+    isSuperAdmin: boolean;
     mode: 'embedded' | 'standalone' | null;
     user: User | null;
     balance: number | null;
@@ -342,6 +347,7 @@ interface UserStateResult extends OperationResult {
         userRole: string;
         userId: string;
         userRoleIds?: number[];
+        isSuperAdmin?: boolean;
         personas?: any[];
     };
 }

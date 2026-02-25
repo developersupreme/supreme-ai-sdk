@@ -29,6 +29,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [mode, setMode] = useState<'embedded' | 'standalone' | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -54,6 +55,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
       if (data) {
         setIsInitialized(true);
         setIsAuthenticated(true);
+        setIsSuperAdmin(data.user?.is_superadmin ?? false);
         setUser(data.user);
         setMode(data.mode as 'embedded' | 'standalone');
         setLoading(false);
@@ -80,6 +82,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     client.on('loginSuccess', (data) => {
       if (data) {
         setIsAuthenticated(true);
+        setIsSuperAdmin(data.user?.is_superadmin ?? false);
         setUser(data.user);
         setError(null);
         // Sync new state fields from client
@@ -99,6 +102,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
 
     client.on('logoutSuccess', () => {
       setIsAuthenticated(false);
+      setIsSuperAdmin(false);
       setUser(null);
       setBalance(null);
       setAccessToken(null);
@@ -313,6 +317,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
   return {
     isInitialized,
     isAuthenticated,
+    isSuperAdmin,
     mode,
     user,
     balance,

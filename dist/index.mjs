@@ -758,6 +758,7 @@ var CreditSystemClient = class extends EventEmitter {
       isInIframe: window !== window.parent,
       isInitialized: false,
       isAuthenticated: false,
+      isSuperAdmin: false,
       user: null,
       balance: 0,
       personas: [],
@@ -852,8 +853,10 @@ var CreditSystemClient = class extends EventEmitter {
       this.log("\u{1F39F}\uFE0F JWT token received from parent");
       this.log(`\u{1F464} User: ${data.user?.email || "Unknown"}`);
       this.log(`\u{1F510} Token length: ${data.token?.length || 0} characters`);
+      const isSuperAdmin = data.isSuperAdmin ?? data.user?.is_superadmin ?? false;
       const enrichedUser = data.user ? {
         ...data.user,
+        is_superadmin: isSuperAdmin,
         userRoleIds: data.organization?.userRoleIds,
         organizations: data.organizations || data.user.organizations,
         // Include organizations array
@@ -889,6 +892,7 @@ var CreditSystemClient = class extends EventEmitter {
       }
       this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
+      this.state.isSuperAdmin = isSuperAdmin;
       this.state.accessToken = data.token || null;
       this.state.refreshToken = data.refreshToken || null;
       const orgs = data.organizations || enrichedUser?.organizations;
@@ -941,6 +945,7 @@ var CreditSystemClient = class extends EventEmitter {
         this.log("\u2705 Token is valid!");
         this.state.user = savedAuth.user;
         this.state.isAuthenticated = true;
+        this.state.isSuperAdmin = savedAuth.user?.is_superadmin ?? false;
         this.state.accessToken = savedAuth.token;
         this.state.refreshToken = savedAuth.refreshToken || null;
         if (savedAuth.user?.organizations && Array.isArray(savedAuth.user.organizations)) {
@@ -1028,6 +1033,7 @@ var CreditSystemClient = class extends EventEmitter {
         this.log("\u{1F4BE} Tokens saved to storage");
         this.state.user = result.user;
         this.state.isAuthenticated = true;
+        this.state.isSuperAdmin = result.user.is_superadmin ?? false;
         this.state.accessToken = result.tokens.access_token;
         this.state.refreshToken = result.tokens.refresh_token;
         if (result.user.organizations && Array.isArray(result.user.organizations)) {
@@ -1094,6 +1100,7 @@ var CreditSystemClient = class extends EventEmitter {
     this.state.balance = 0;
     this.state.isInitialized = false;
     this.state.isAuthenticated = false;
+    this.state.isSuperAdmin = false;
     this.state.accessToken = null;
     this.state.refreshToken = null;
     this.state.organizations = [];
@@ -1661,8 +1668,13 @@ var CreditSystemClient = class extends EventEmitter {
               userId: data.userState.userId,
               userRole: data.userState.userRole,
               // Also update userRoleIds if provided (for consistency with JWT token response)
-              ...data.userState.userRoleIds && { userRoleIds: data.userState.userRoleIds }
+              ...data.userState.userRoleIds && { userRoleIds: data.userState.userRoleIds },
+              // Update superadmin flag if provided
+              ...data.userState.isSuperAdmin !== void 0 && { is_superadmin: data.userState.isSuperAdmin }
             };
+            if (data.userState.isSuperAdmin !== void 0) {
+              this.state.isSuperAdmin = data.userState.isSuperAdmin;
+            }
             this.storage.set("auth", {
               ...auth,
               user: updatedUser
@@ -2117,6 +2129,7 @@ function useCreditSystem(config) {
   const clientRef = useRef(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [mode, setMode] = useState(null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(null);
@@ -2137,6 +2150,7 @@ function useCreditSystem(config) {
       if (data) {
         setIsInitialized(true);
         setIsAuthenticated(true);
+        setIsSuperAdmin(data.user?.is_superadmin ?? false);
         setUser(data.user);
         setMode(data.mode);
         setLoading(false);
@@ -2159,6 +2173,7 @@ function useCreditSystem(config) {
     client.on("loginSuccess", (data) => {
       if (data) {
         setIsAuthenticated(true);
+        setIsSuperAdmin(data.user?.is_superadmin ?? false);
         setUser(data.user);
         setError(null);
         const state = client.getState();
@@ -2175,6 +2190,7 @@ function useCreditSystem(config) {
     });
     client.on("logoutSuccess", () => {
       setIsAuthenticated(false);
+      setIsSuperAdmin(false);
       setUser(null);
       setBalance(null);
       setAccessToken(null);
@@ -2321,6 +2337,7 @@ function useCreditSystem(config) {
   return {
     isInitialized,
     isAuthenticated,
+    isSuperAdmin,
     mode,
     user,
     balance,
@@ -2465,6 +2482,7 @@ var ParentIntegrator = class {
           token: tokenData.token,
           refreshToken: tokenData.refreshToken,
           user: tokenData.user,
+          isSuperAdmin: tokenData.user?.is_superadmin ?? false,
           timestamp: Date.now()
         });
         if (this.config.debug) {

@@ -24,6 +24,7 @@ export interface User {
   id: number;
   email: string;
   name?: string;
+  is_superadmin?: boolean;
   organizations?: Organization[];
   personas?: Array<{
     id: string;
@@ -104,6 +105,7 @@ export interface SDKState {
   isInIframe: boolean;
   isInitialized: boolean;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   user: User | null;
   balance: number;
   personas: Persona[];
@@ -130,6 +132,7 @@ export interface TokenResponseMessage extends IframeMessage {
   token?: string;
   refreshToken?: string;
   user?: User;
+  isSuperAdmin?: boolean;
   organization?: {
     organizationId: string;
     organizationName: string;
@@ -161,6 +164,7 @@ export interface UserStateResponseMessage extends IframeMessage {
     userRole: string;
     userId: string;
     userRoleIds?: number[]; // Array of role IDs (for consistency with JWT token response)
+    isSuperAdmin?: boolean;
     personas?: any[];
   };
   error?: string;
@@ -330,6 +334,7 @@ export interface SwitchOrgResult {
 export interface UseCreditSystemReturn {
   isInitialized: boolean;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   mode: 'embedded' | 'standalone' | null;
   user: User | null;
   balance: number | null;
@@ -384,6 +389,7 @@ export interface UserStateResult extends OperationResult {
     userRole: string;
     userId: string;
     userRoleIds?: number[];
+    isSuperAdmin?: boolean;
     personas?: any[];
   };
 }

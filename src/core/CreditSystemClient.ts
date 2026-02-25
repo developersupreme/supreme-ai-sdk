@@ -75,6 +75,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       isInIframe: window !== window.parent,
       isInitialized: false,
       isAuthenticated: false,
+      isSuperAdmin: false,
       user: null,
       balance: 0,
       personas: [],
@@ -196,9 +197,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`👤 User: ${data.user?.email || 'Unknown'}`);
       this.log(`🔐 Token length: ${data.token?.length || 0} characters`);
 
-      // Extract organizations array, personas, and userRoleIds from response
+      // Extract organizations array, personas, userRoleIds, and superadmin flag from response
+      const isSuperAdmin = (data as any).isSuperAdmin ?? data.user?.is_superadmin ?? false;
       const enrichedUser = data.user ? {
         ...data.user,
+        is_superadmin: isSuperAdmin,
         userRoleIds: data.organization?.userRoleIds,
         organizations: (data as any).organizations || data.user.organizations, // Include organizations array
         personas: (data as any).personas || data.user.personas, // Include personas array
@@ -241,6 +244,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
       this.state.user = enrichedUser || null;
       this.state.isAuthenticated = true;
+      this.state.isSuperAdmin = isSuperAdmin;
       this.state.accessToken = data.token || null;
       this.state.refreshToken = data.refreshToken || null;
 
@@ -307,6 +311,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         this.log('✅ Token is valid!');
         this.state.user = savedAuth.user;
         this.state.isAuthenticated = true;
+        this.state.isSuperAdmin = savedAuth.user?.is_superadmin ?? false;
         this.state.accessToken = savedAuth.token;
         this.state.refreshToken = savedAuth.refreshToken || null;
 
@@ -416,6 +421,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
         this.state.user = result.user;
         this.state.isAuthenticated = true;
+        this.state.isSuperAdmin = result.user.is_superadmin ?? false;
         this.state.accessToken = result.tokens.access_token;
         this.state.refreshToken = result.tokens.refresh_token;
 
@@ -490,6 +496,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.state.balance = 0;
     this.state.isInitialized = false;
     this.state.isAuthenticated = false;
+    this.state.isSuperAdmin = false;
     this.state.accessToken = null;
     this.state.refreshToken = null;
     this.state.organizations = [];
@@ -1216,8 +1223,15 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
               userId: data.userState.userId,
               userRole: data.userState.userRole,
               // Also update userRoleIds if provided (for consistency with JWT token response)
-              ...(data.userState.userRoleIds && { userRoleIds: data.userState.userRoleIds })
+              ...(data.userState.userRoleIds && { userRoleIds: data.userState.userRoleIds }),
+              // Update superadmin flag if provided
+              ...(data.userState.isSuperAdmin !== undefined && { is_superadmin: data.userState.isSuperAdmin })
             };
+
+            // Sync isSuperAdmin to SDK state
+            if (data.userState.isSuperAdmin !== undefined) {
+              this.state.isSuperAdmin = data.userState.isSuperAdmin;
+            }
 
             this.storage.set('auth', {
               ...auth,

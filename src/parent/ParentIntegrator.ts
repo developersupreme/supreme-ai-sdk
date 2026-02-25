@@ -144,6 +144,7 @@ export class ParentIntegrator {
           token: tokenData.token,
           refreshToken: tokenData.refreshToken,
           user: tokenData.user,
+          isSuperAdmin: tokenData.user?.is_superadmin ?? false,
           timestamp: Date.now()
         });
 
