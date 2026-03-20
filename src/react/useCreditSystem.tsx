@@ -25,7 +25,16 @@ import type {
 } from '../types';
 
 export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn {
+  // Create client synchronously during first render (not in useEffect).
+  // This ensures history patches for deep linking are installed BEFORE
+  // <BrowserRouter> renders and caches references to pushState/replaceState.
   const clientRef = useRef<CreditSystemClient | null>(null);
+  if (!clientRef.current) {
+    clientRef.current = new CreditSystemClient({
+      ...config,
+      autoInit: false  // We'll initialize in useEffect after event listeners are attached
+    });
+  }
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -41,14 +50,9 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
 
-  // Initialize client
+  // Set up event listeners and initialize
   useEffect(() => {
-    const client = new CreditSystemClient({
-      ...config,
-      autoInit: true
-    });
-
-    clientRef.current = client;
+    const client = clientRef.current!;
 
     // Set up event listeners
     client.on('ready', (data) => {
@@ -174,6 +178,9 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
         setOrganizations(state.organizations);
       }
     });
+
+    // Now initialize (event listeners are attached, safe to start async auth)
+    client.initialize();
 
     // Cleanup
     return () => {
