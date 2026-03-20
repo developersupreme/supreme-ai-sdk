@@ -314,6 +314,11 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     return await clientRef.current.switchOrganization(orgId);
   }, []);
 
+  // Notify parent of route change (escape hatch for manual deep linking)
+  const notifyRouteChanged = useCallback((path?: string): void => {
+    clientRef.current?.notifyRouteChanged(path);
+  }, []);
+
   return {
     isInitialized,
     isAuthenticated,
@@ -340,6 +345,7 @@ export function useCreditSystem(config?: CreditSDKConfig): UseCreditSystemReturn
     requestCurrentUserState,
     requestUserOrganizations,
     requestUserPersonas,
-    switchOrganization
+    switchOrganization,
+    notifyRouteChanged
   };
 }

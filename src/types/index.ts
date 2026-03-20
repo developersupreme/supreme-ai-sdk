@@ -369,6 +369,7 @@ export interface UseCreditSystemReturn {
   requestUserOrganizations: () => Promise<UserOrgsResult>;
   requestUserPersonas: () => Promise<UserPersonasResult>;
   switchOrganization: (orgId: string) => Promise<SwitchOrgResult>;
+  notifyRouteChanged: (path?: string) => void;
 }
 
 // Persona Types

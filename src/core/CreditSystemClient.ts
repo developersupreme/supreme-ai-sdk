@@ -111,6 +111,13 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     // Set up event handlers
     this.setupEventHandlers();
 
+    // Install history patches synchronously BEFORE any framework (React Router, etc.)
+    // can cache references to the original pushState/replaceState.
+    // This must happen in the constructor, not after async auth.
+    if (this.config.deepLinking && this.state.isInIframe) {
+      this.installHistoryPatches();
+    }
+
     // Auto-initialize if configured
     // Defer initialization to next tick to allow event listeners to be attached
     if (this.config.autoInit) {
@@ -1017,22 +1024,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   }
 
   /**
-   * Start watching for route changes in the embedded app.
-   * Detects pushState, replaceState, and popstate (back/forward) navigation.
+   * Install history patches synchronously.
+   * Called from the constructor BEFORE any framework (React Router, Vue Router, etc.)
+   * can cache references to the original pushState/replaceState.
    */
-  private startRouteWatcher(): void {
-    this.lastPath = this.getCurrentPath();
-    this.log('🔗 Deep linking enabled — starting route watcher');
-
-    // 1. Listen for popstate (browser back/forward)
-    this.popstateHandler = () => this.checkRouteChange();
-    window.addEventListener('popstate', this.popstateHandler);
-
-    // 2. Listen for hashchange (hash-based routing, e.g. location.hash = '#/page')
-    this.hashchangeHandler = () => this.checkRouteChange();
-    window.addEventListener('hashchange', this.hashchangeHandler);
-
-    // 3. Monkey-patch pushState / replaceState to detect SPA navigation
+  private installHistoryPatches(): void {
     this.originalPushState = history.pushState.bind(history);
     this.originalReplaceState = history.replaceState.bind(history);
 
@@ -1048,7 +1044,33 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       self.checkRouteChange();
     };
 
-    // 3. Send the initial route so the parent URL syncs on iframe load
+    // Listen for popstate (browser back/forward)
+    this.popstateHandler = () => this.checkRouteChange();
+    window.addEventListener('popstate', this.popstateHandler);
+
+    // Listen for hashchange (hash-based routing, e.g. location.hash = '#/page')
+    this.hashchangeHandler = () => this.checkRouteChange();
+    window.addEventListener('hashchange', this.hashchangeHandler);
+
+    this.lastPath = this.getCurrentPath();
+    this.log('🔗 Deep linking: history patches installed (early, before framework init)');
+  }
+
+  /**
+   * Start the route watcher — called from initializeWithToken() after auth completes.
+   * If history patches were already installed in the constructor, just sends the initial route.
+   * Otherwise falls back to full installation (for non-constructor code paths).
+   */
+  private startRouteWatcher(): void {
+    if (this.originalPushState) {
+      // Already patched in constructor — just send the initial route
+      this.log('🔗 Deep linking: sending initial route to parent');
+      this.notifyRouteChanged(this.getCurrentPath());
+      return;
+    }
+
+    // Fallback: install patches now (shouldn't normally reach here with deepLinking: true)
+    this.installHistoryPatches();
     this.notifyRouteChanged(this.lastPath);
   }
 
@@ -1083,12 +1105,17 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
   /**
    * Check if the route has changed and notify the parent if so.
+   * Only sends messages when the SDK is fully initialized in embedded mode,
+   * but always tracks the lastPath so no changes are missed.
    */
   private checkRouteChange(): void {
     const currentPath = this.getCurrentPath();
     if (currentPath !== this.lastPath) {
       this.lastPath = currentPath;
-      this.notifyRouteChanged(currentPath);
+      // Only send to parent when fully initialized in embedded mode
+      if (this.state.isInitialized && this.state.mode === 'embedded') {
+        this.notifyRouteChanged(currentPath);
+      }
     }
   }
 
