@@ -41,6 +41,7 @@ export type {
   IframeMessage,
   TokenRequestMessage,
   TokenResponseMessage,
+  RouteChangedMessage,
   UserStateRequestMessage,
   UserStateResponseMessage,
 
