@@ -53,6 +53,16 @@
     -   [SessionStorage Keys](#sessionstorage-keys)
     -   [SDK Methods Comparison](#sdk-methods-comparison)
 
+### 🔷 Deep Linking
+
+-   [Deep Linking (URL Sync)](#deep-linking-url-sync)
+    -   [How It Works](#how-deep-linking-works)
+    -   [Setup (Child App)](#deep-linking-setup-child-app)
+    -   [Setup (Parent App)](#deep-linking-setup-parent-app)
+    -   [Manual Route Notification](#manual-route-notification)
+    -   [Listening for Route Changes](#listening-for-route-changes)
+    -   [Navigation Types Detected](#navigation-types-detected)
+
 ### 🔷 API Reference
 
 -   [API Endpoints](#api-endpoints)
@@ -2210,6 +2220,165 @@ window.addEventListener('message', (event) => {
   }
 });
 ```
+
+---
+
+# 🔷 Deep Linking (URL Sync)
+
+## Deep Linking (URL Sync)
+
+Deep linking allows the parent application's URL bar to stay in sync with the embedded iframe app's route. When a user navigates within the iframe (e.g., `/posts/123`), the parent URL updates automatically (e.g., `/community/posts/123`).
+
+This works with **all app types** — SPA frameworks (React, Vue, Angular), hash-based routing, and traditional multi-page apps.
+
+### How Deep Linking Works
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Iframe as Child App (iframe)
+    participant SDK as CreditSystemClient
+    participant Parent as Parent Page
+
+    User->>Iframe: Navigates to /posts/123
+    Iframe->>SDK: pushState detected
+    SDK->>Parent: postMessage({ type: 'ROUTE_CHANGED', path: '/posts/123' })
+    Parent->>Parent: history.replaceState(null, '', '/community/posts/123')
+    Note over Parent: URL bar updates without page reload
+```
+
+### Deep Linking Setup (Child App)
+
+**Step 1: Enable deep linking in the SDK config**
+
+Simply add `deepLinking: true` to your `CreditSystemClient` configuration. That's it — the SDK handles everything else automatically.
+
+```typescript
+import { CreditSystemClient } from "@supreme-ai/si-sdk";
+
+const sdk = new CreditSystemClient({
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+  authUrl: import.meta.env.VITE_AUTH_URL,
+  deepLinking: true,  // ← Enable deep linking
+  debug: false,
+});
+```
+
+Or with the React hook:
+
+```typescript
+import { useCreditSystem } from "@supreme-ai/si-sdk";
+
+const credit = useCreditSystem({
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+  authUrl: import.meta.env.VITE_AUTH_URL,
+  deepLinking: true,  // ← Enable deep linking
+});
+```
+
+**That's all you need.** When `deepLinking: true` is set and the app is running in embedded mode:
+
+- ✅ The SDK automatically detects all route changes (SPA navigation, back/forward, hash changes)
+- ✅ Sends the initial route to the parent on startup (so the URL syncs immediately on iframe load)
+- ✅ Sends `{ type: 'ROUTE_CHANGED', path: '/current/path?query=value#hash' }` to the parent on every navigation
+- ✅ Cleans up all listeners and restores original `history` methods on `destroy()`
+- ✅ Only activates in embedded mode — no effect in standalone mode
+
+### Deep Linking Setup (Parent App)
+
+The parent app needs to:
+
+1. **Listen** for `ROUTE_CHANGED` messages from the iframe
+2. **Add `data-deep-link-base`** attribute to the iframe element to define the URL prefix
+
+**Example iframe HTML:**
+
+```html
+<iframe
+  id="my-app"
+  src="https://my-child-app.com"
+  data-deep-link-base="/community"
+></iframe>
+```
+
+When the child navigates to `/posts/123`, the parent URL becomes `/community/posts/123`.
+
+> **Note:** The parent-side handler is already implemented in the Supreme Intelligence platform's `parent-integrator-v2.js`. If you're using a different parent, you'll need to add a `ROUTE_CHANGED` handler — see below for an example.
+
+**Custom parent handler (if not using the built-in integrator):**
+
+```javascript
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'ROUTE_CHANGED') {
+    const deepLinkBase = iframe.getAttribute('data-deep-link-base');
+    const iframePath = event.data.path;
+
+    if (deepLinkBase && typeof iframePath === 'string') {
+      const base = deepLinkBase.replace(/\/+$/, '');
+      const path = iframePath.startsWith('/') ? iframePath : '/' + iframePath;
+      const newUrl = path === '/' ? base : base + path;
+
+      if (newUrl !== window.location.pathname) {
+        history.replaceState(null, '', newUrl);
+      }
+    }
+  }
+});
+```
+
+### Manual Route Notification
+
+If you need to notify the parent of a route change manually (e.g., for custom navigation logic), you can call `notifyRouteChanged()` directly — **even without enabling `deepLinking: true`**:
+
+```typescript
+// Notify parent with the current window path
+sdk.notifyRouteChanged();
+
+// Or specify a custom path
+sdk.notifyRouteChanged('/custom/path?tab=settings#section');
+```
+
+### Listening for Route Changes
+
+The SDK also emits a local `routeChanged` event that you can listen to in the child app:
+
+```typescript
+sdk.on('routeChanged', ({ path }) => {
+  console.log('Route changed to:', path);
+  // e.g., update analytics, breadcrumbs, etc.
+});
+```
+
+### Navigation Types Detected
+
+| Navigation Type | Detection Method | Works With |
+|---|---|---|
+| `router.push()` / `history.pushState()` | Monkey-patched `pushState` | React Router, Vue Router, Angular Router, etc. |
+| `router.replace()` / `history.replaceState()` | Monkey-patched `replaceState` | All SPA frameworks |
+| Browser back/forward | `popstate` event listener | All browsers |
+| Hash changes (`location.hash = '#/page'`) | `hashchange` event listener | Hash-based routing (e.g., older Angular, Ember) |
+| Full page reload / link click | Initial route sent on SDK re-initialization | Traditional multi-page apps |
+| Manual trigger | Public `notifyRouteChanged(path?)` method | Any custom navigation |
+
+### Configuration Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `deepLinking` | `boolean` | `false` | Enable automatic route change detection and parent notification. Only active in embedded mode. |
+
+### PostMessage Format
+
+The SDK sends this message to the parent window on every route change:
+
+```json
+{
+  "type": "ROUTE_CHANGED",
+  "path": "/posts/123?tab=comments#top",
+  "timestamp": 1704067200000
+}
+```
+
+The `path` includes the full pathname + search params + hash fragment.
 
 ---
 
