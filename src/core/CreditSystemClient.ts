@@ -42,6 +42,13 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
   private balanceTimer?: NodeJS.Timeout;
   private parentResponseReceived = false;
 
+  // Deep linking / route watcher state
+  private lastPath: string = '';
+  private originalPushState?: typeof history.pushState;
+  private originalReplaceState?: typeof history.replaceState;
+  private popstateHandler?: () => void;
+  private hashchangeHandler?: () => void;
+
   constructor(config: CreditSDKConfig = {}) {
     super();
 
@@ -65,6 +72,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
         credits: config.features?.credits !== false, // Default true
         personas: config.features?.personas !== false // Default true
       },
+      deepLinking: config.deepLinking || false,
       onAuthRequired: config.onAuthRequired || (() => {}),
       onTokenExpired: config.onTokenExpired || (() => {})
     };
@@ -371,6 +379,11 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     // Load initial personas if personas feature is enabled
     if (this.config.features.personas) {
       this.loadPersonas();
+    }
+
+    // Start deep linking route watcher if enabled and in embedded mode
+    if (this.config.deepLinking && this.state.mode === 'embedded') {
+      this.startRouteWatcher();
     }
 
     this.emit('ready', {
@@ -989,6 +1002,109 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
       this.log(`❌ Failed to get agents: ${error.message}`);
       this.emit('error', { type: 'agents', error: error.message });
       return { success: false, error: error.message, agents: [] };
+    }
+  }
+
+  // ===================================================================
+  // DEEP LINKING METHODS
+  // ===================================================================
+
+  /**
+   * Get the current full path (pathname + search + hash)
+   */
+  private getCurrentPath(): string {
+    return window.location.pathname + window.location.search + window.location.hash;
+  }
+
+  /**
+   * Start watching for route changes in the embedded app.
+   * Detects pushState, replaceState, and popstate (back/forward) navigation.
+   */
+  private startRouteWatcher(): void {
+    this.lastPath = this.getCurrentPath();
+    this.log('🔗 Deep linking enabled — starting route watcher');
+
+    // 1. Listen for popstate (browser back/forward)
+    this.popstateHandler = () => this.checkRouteChange();
+    window.addEventListener('popstate', this.popstateHandler);
+
+    // 2. Listen for hashchange (hash-based routing, e.g. location.hash = '#/page')
+    this.hashchangeHandler = () => this.checkRouteChange();
+    window.addEventListener('hashchange', this.hashchangeHandler);
+
+    // 3. Monkey-patch pushState / replaceState to detect SPA navigation
+    this.originalPushState = history.pushState.bind(history);
+    this.originalReplaceState = history.replaceState.bind(history);
+
+    const self = this;
+
+    history.pushState = function (...args: Parameters<typeof history.pushState>) {
+      self.originalPushState!(...args);
+      self.checkRouteChange();
+    };
+
+    history.replaceState = function (...args: Parameters<typeof history.replaceState>) {
+      self.originalReplaceState!(...args);
+      self.checkRouteChange();
+    };
+
+    // 3. Send the initial route so the parent URL syncs on iframe load
+    this.notifyRouteChanged(this.lastPath);
+  }
+
+  /**
+   * Stop the route watcher and restore original history methods.
+   */
+  private stopRouteWatcher(): void {
+    // Remove popstate listener
+    if (this.popstateHandler) {
+      window.removeEventListener('popstate', this.popstateHandler);
+      this.popstateHandler = undefined;
+    }
+
+    // Remove hashchange listener
+    if (this.hashchangeHandler) {
+      window.removeEventListener('hashchange', this.hashchangeHandler);
+      this.hashchangeHandler = undefined;
+    }
+
+    // Restore original history methods
+    if (this.originalPushState) {
+      history.pushState = this.originalPushState;
+      this.originalPushState = undefined;
+    }
+    if (this.originalReplaceState) {
+      history.replaceState = this.originalReplaceState;
+      this.originalReplaceState = undefined;
+    }
+
+    this.log('🔗 Deep linking route watcher stopped');
+  }
+
+  /**
+   * Check if the route has changed and notify the parent if so.
+   */
+  private checkRouteChange(): void {
+    const currentPath = this.getCurrentPath();
+    if (currentPath !== this.lastPath) {
+      this.lastPath = currentPath;
+      this.notifyRouteChanged(currentPath);
+    }
+  }
+
+  /**
+   * Notify the parent frame that the route has changed.
+   * Called automatically when deep linking is enabled, but can also be called manually.
+   * @param path - The path to send. Defaults to the current window path (pathname + search + hash).
+   */
+  notifyRouteChanged(path?: string): void {
+    const resolvedPath = path ?? this.getCurrentPath();
+
+    this.log(`🔗 Route changed: ${resolvedPath}`);
+    this.emit('routeChanged', { path: resolvedPath });
+
+    if (this.state.mode === 'embedded') {
+      this.messageBridge.sendToParent('ROUTE_CHANGED', { path: resolvedPath });
     }
   }
 
@@ -1793,6 +1909,7 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
    */
   destroy(): void {
     this.clearTimers();
+    this.stopRouteWatcher();
     this.messageBridge.destroy();
     this.removeAllListeners();
     this.state.isInitialized = false;

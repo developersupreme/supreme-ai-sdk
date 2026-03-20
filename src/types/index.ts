@@ -96,6 +96,8 @@ export interface CreditSDKConfig {
   storagePrefix?: string;
   mode?: 'auto' | 'embedded' | 'standalone';
   features?: SDKFeatures;
+  /** Enable deep linking: auto-detect SPA route changes and notify the parent frame. Only active in embedded mode. */
+  deepLinking?: boolean;
   onAuthRequired?: () => void;
   onTokenExpired?: () => void;
 }
@@ -202,6 +204,12 @@ export interface UserPersonasResponseMessage extends IframeMessage {
   error?: string;
 }
 
+export interface RouteChangedMessage extends IframeMessage {
+  type: 'ROUTE_CHANGED';
+  /** The full path including pathname, search params, and hash (e.g. "/posts/123?tab=comments#top") */
+  path: string;
+}
+
 // Event Types
 export type CreditSDKEvents = {
   'ready': { user: User | null; mode: string };
@@ -237,6 +245,7 @@ export type CreditSDKEvents = {
   'organizationsUpdated': { organizations: Organization[] };
   'organizationSwitched': { previousOrgId?: string; newOrgId: string; organization: Organization };
   'tokensUpdated': { accessToken: string; refreshToken?: string };
+  'routeChanged': { path: string };
 };
 
 // API Response Types
