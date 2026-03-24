@@ -1105,16 +1105,24 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
 
   /**
    * Check if the route has changed and notify the parent if so.
-   * Only sends messages when the SDK is fully initialized in embedded mode,
-   * but always tracks the lastPath so no changes are missed.
+   * Sends ROUTE_CHANGED to the parent whenever the path changes.
+   * The parent-side handler deduplicates against its own URL.
    */
   private checkRouteChange(): void {
     const currentPath = this.getCurrentPath();
     if (currentPath !== this.lastPath) {
       this.lastPath = currentPath;
-      // Only send to parent when fully initialized in embedded mode
-      if (this.state.isInitialized && this.state.mode === 'embedded') {
-        this.notifyRouteChanged(currentPath);
+      // Send directly to parent via postMessage (no SDK state guards).
+      // This ensures deep linking works even during async initialization.
+      // The parent handler already deduplicates (compares against window.location.pathname).
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'ROUTE_CHANGED',
+          path: currentPath,
+          timestamp: Date.now()
+        }, '*');
+        this.log(`🔗 Route changed: ${currentPath}`);
+        this.emit('routeChanged', { path: currentPath });
       }
     }
   }
@@ -1130,8 +1138,12 @@ export class CreditSystemClient extends EventEmitter<CreditSDKEvents> {
     this.log(`🔗 Route changed: ${resolvedPath}`);
     this.emit('routeChanged', { path: resolvedPath });
 
-    if (this.state.mode === 'embedded') {
-      this.messageBridge.sendToParent('ROUTE_CHANGED', { path: resolvedPath });
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: 'ROUTE_CHANGED',
+        path: resolvedPath,
+        timestamp: Date.now()
+      }, '*');
     }
   }
 
